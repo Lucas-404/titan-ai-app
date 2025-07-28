@@ -1,0 +1,35 @@
+[
+  {
+    "id": "teste-123",
+    "timestamp": "2025-06-09T03:17:43.718787",
+    "tipo": "teste",
+    "titulo": "Teste Manual",
+    "descricao": "Verificando se consegue salvar"
+  },
+  {
+    "session_id": "5cc4125d-11df-4209-8c60-e83dbed6fada",
+    "user_ip": "192.168.1.15",
+    "tipo": "geral",
+    "titulo": "teste",
+    "descricao": "teste",
+    "passos_reproducao": "",
+    "url_atual": "http://192.168.1.15:5001/",
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+    "thinking_mode": false,
+    "id": "ac7551c8-e2f9-471d-8c36-18cffbfbd33a",
+    "timestamp": "2025-06-09T03:20:35.703731"
+  },
+  {
+    "session_id": "969bc1f3-08cb-40ea-8b11-a5a417069f2a",
+    "user_ip": "192.168.1.15",
+    "tipo": "bug",
+    "titulo": "opa isso e um teste",
+    "descricao": "opa isso e um teste",
+    "passos_reproducao": "opa isso e um teste",
+    "url_atual": "http://192.168.1.15:5001/",
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+    "thinking_mode": false,
+    "id": "3abd91f2-d27b-4f1d-bc78-442ec34f2938",
+    "timestamp": "2025-06-09T11:51:38.476490"
+  }
+]

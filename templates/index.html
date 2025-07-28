@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titan AI - Inteligência Artificial Avançada</title>
+    
+    <!-- ✅ CSRF TOKEN CRÍTICO -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="icon" type="image/png"
+        href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAM5JREFUWEftl0sOwiAMRFszC9i4hW1c2cLCxkbA3i2gD7AQCwk1k7YQe2X+/z2SkpJUeIuICEkBy7Isi4gI4TAMg4hS3/f9BTwYhmHIsizP83wJCAkhhBBCCCF0uVz+ABmG4fF4fO5ut2s6nU4mHMeRMAzDMAyD4zjO83wcx3EcB0KIz+cPhBAIIYSQ0G63ezKZzOfzOQDgOI4jIYSQIAzDMIQQQgiBEMK3bdsQQgghhBBCCCGEEEIIIZSfn38B5q2XgRBCiHa7fcjlcgEA4gT+4gT+4gQAAAABJRU5ErkJggg==">
+</head>
+
+<body>
+    <!-- Partículas animadas -->
+    <div class="particles" id="particles"></div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-logo">
+            <div class="titan-text">TITAN</div>
+        </div>
+        <div class="header-actions">
+            <button class="header-feedback-btn" onclick="openFeedbackModal()" title="Reportar Problema">
+                💬 Feedback
+            </button>
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span>Online • 1/5</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Welcome Container -->
+    <main class="welcome-container">
+        <div class="welcome-message">
+            <p class="welcome-text">
+                Olá! Sou o <strong>Titan</strong> com <strong>memória avançada</strong> e ferramentas poderosas!
+            </p>
+        </div>
+
+        <!-- Input Principal -->
+        <div class="main-input-section">
+            <div class="main-input-container">
+                <textarea class="main-input" id="mainInput" placeholder="Oi titan tudo bem?" rows="1" autocomplete="off"
+                    autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+                <button class="settings-btn" onclick="toggleSettingsTab()" title="Ferramentas (Ctrl+.)">
+                    <span>...</span>
+                </button>
+                <button class="send-btn" id="sendBtn">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Exemplos -->
+        <div class="examples-section">
+            <div class="examples-grid">
+                <span class="example-item" onclick="setQuickExample('Que horas são?')">
+                    Que horas são?
+                </span>
+                <span class="example-item" onclick="setQuickExample('Salve que meu nome é João')">
+                    Salve que meu nome é...
+                </span>
+                <span class="example-item" onclick="setQuickExample('Calcule 125 + 275')">
+                    Calcule 125 + 275
+                </span>
+            </div>
+        </div>
+    </main>
+
+    <!-- Chat Container -->
+    <div class="chat-container" id="chatContainer" style="display: none;">
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input-area" id="chatInputArea" style="display: none;">
+            <div class="chat-input-container">
+                <textarea id="chatInput" placeholder="Continue conversando com o Titan..." rows="1" autocomplete="off"
+                    autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+                <button class="settings-btn" onclick="toggleSettingsTab()" title="Ferramentas (Ctrl+.)">
+                    <span>...</span>
+                </button>
+                <button class="send-btn" id="chatSendBtn">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Thinking Indicator -->
+    <div class="thinking" id="thinking" style="display: none;">
+        <span class="spinner"></span>
+        <span id="thinkingText">Titan está pensando...</span>
+    </div>
+
+    <!-- Aba de Ferramentas -->
+    <div class="settings-tab" id="settingsTab">
+        <div class="settings-handle" onclick="toggleSettingsTab()">
+            <span class="settings-icon"></span>
+        </div>
+        <button class="close-btn" onclick="toggleSettingsTab()" title="Fechar">×</button>
+
+        <div class="settings-content">
+            <!-- Thinking Toggle -->
+            <div class="thinking-setting" onclick="toggleThinkingClean()">
+                <div class="thinking-info">
+                    <div class="thinking-icon-wrapper">
+                        <span id="thinkingModeIcon">🧠</span>
+                    </div>
+                    <div class="thinking-details">
+                        <h4 id="thinkingModeTitle">Pensamento prolongado</h4>
+                    </div>
+                </div>
+                <div class="titan-toggle" id="titanToggle"></div>
+            </div> <!-- Conversas -->
+            <div class="section-title">Conversas</div>
+            <button class="titan-btn" onclick="toggleHistorySidebar()">
+                Ver Histórico
+            </button>
+            <button class="titan-btn" onclick="startNewChat()">
+                Nova Conversa
+            </button>
+        </div>
+    </div>
+
+    <!-- Histórico Sidebar -->
+    <div class="history-sidebar" id="historySidebar">
+        <div class="sidebar-header">
+            <h3>Histórico de Conversas</h3>
+            <div class="sidebar-controls">
+                <button class="sidebar-btn" onclick="startNewChat()" title="Nova Conversa">+</button>
+                <button class="sidebar-btn" onclick="toggleHistorySidebar()" title="Fechar">×</button>
+            </div>
+        </div>
+
+        <div class="sidebar-search">
+            <input type="text" id="historySearch" placeholder="🔍 Buscar conversas..." autocomplete="off"
+                autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
+
+        <div class="sidebar-filters">
+            <button class="filter-btn active" data-filter="all">Todas</button>
+            <button class="filter-btn" data-filter="pinned">Fixadas</button>
+            <button class="filter-btn" data-filter="recent">Recentes</button>
+        </div>
+
+        <div class="sidebar-content" id="historyList">
+            <!-- Conversas carregadas via JavaScript -->
+        </div>
+
+        <div class="sidebar-footer">
+            <button class="sidebar-btn-full" onclick="exportAllChats()">
+                Exportar Todas
+            </button>
+            <button class="sidebar-btn-full danger" onclick="clearAllHistory()">
+                Limpar Histórico
+            </button>
+        </div>
+    </div>
+
+    <!-- Overlay do Histórico -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleHistorySidebar()"></div>
+
+    <!-- Modal de Feedback -->
+    <div class="modal feedback-modal" id="feedbackModal" style="display: none;">
+        <div class="modal-content feedback-modal-content">
+            <div class="feedback-header">
+                <div class="feedback-icon" id="feedbackIcon"></div>
+                <h2 id="feedbackTitle">Enviar Feedback</h2>
+                <button class="close-btn" onclick="closeFeedbackModal()">×</button>
+            </div>
+
+            <div class="feedback-body" id="feedbackBody">
+                <form id="feedbackForm">
+                    <!-- ✅ CSRF TOKEN NO FORM -->
+                    <input type="hidden" id="feedbackCsrfToken" name="csrf_token" value="">
+                    <input type="hidden" id="feedbackType" name="tipo" value="geral">
+
+                    <div class="feedback-type-selection">
+                        <h3>🎯 Que tipo de feedback você quer enviar?</h3>
+                        <div class="feedback-types-inline">
+                            <button type="button" class="feedback-type-btn" data-type="bug"
+                                onclick="selectFeedbackType('bug')">
+                                🐛 Bug/Erro
+                            </button>
+                            <button type="button" class="feedback-type-btn" data-type="melhoria"
+                                onclick="selectFeedbackType('melhoria')">
+                                💡 Sugestão
+                            </button>
+                            <button type="button" class="feedback-type-btn" data-type="problema"
+                                onclick="selectFeedbackType('problema')">
+                                ⚠️ Problema
+                            </button>
+                            <button type="button" class="feedback-type-btn" data-type="resposta"
+                                onclick="selectFeedbackType('resposta')">
+                                🤖 Resposta Incorreta
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="feedbackTitleInput" class="required">Título do problema/sugestão</label>
+                        <input type="text" id="feedbackTitleInput" name="titulo"
+                            placeholder="Ex: Titan não responde perguntas sobre matemática" maxlength="100" required>
+                        <div class="field-hint">Seja específico e claro sobre o problema</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="feedbackDescription" class="required">Descrição completa</label>
+                        <textarea id="feedbackDescription" name="descricao"
+                            placeholder="Explique detalhadamente o que aconteceu, quando acontece, e qual o impacto..."
+                            rows="4" maxlength="1000" required></textarea>
+                        <div class="char-counter">
+                            <span id="descriptionCount">0</span>/1000 caracteres
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="feedbackSteps">Como reproduzir o problema? (opcional)</label>
+                        <textarea id="feedbackSteps" name="passos_reproducao"
+                            placeholder="1. Fiz isso...&#10;2. Cliquei aqui...&#10;3. Esperava que..." rows="3"
+                            maxlength="500"></textarea>
+                        <div class="field-hint">Passos para reproduzir ajudam muito a corrigir!</div>
+                    </div>
+
+                    <div class="system-info-compact">
+                        <h4>📊 Informações coletadas automaticamente:</h4>
+                        <p>Navegador, sistema, horário e modo atual do Titan</p>
+                    </div>
+                </form>
+            </div>
+
+            <div class="feedback-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeFeedbackModal()">
+                    Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="submitFeedback()" id="submitFeedbackBtn">
+                    <span class="btn-icon">📤</span>
+                    Enviar Feedback
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/script.js"></script>
+    <script src="/static/history.js"></script>
+    <script src="/static/feedback-inline.js"></script>
+</body>
+</html>
