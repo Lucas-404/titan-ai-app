@@ -19,10 +19,10 @@ class SessionManager:
         }
         self.inicio = time.time()
         
-        print("🔧 Inicializando gerenciador de sessões...")
+        print(" Inicializando gerenciador de sessões...")
         self.cleanup_thread = threading.Thread(target=self._cleanup_sessoes, daemon=True)
         self.cleanup_thread.start()
-        print(f"👥 Limite: {MAX_USUARIOS_SIMULTANEOS} usuários")
+        print(f" Limite: {MAX_USUARIOS_SIMULTANEOS} usuários")
     
     def pode_entrar(self):
         """Verifica se há vagas disponíveis"""
@@ -43,11 +43,11 @@ class SessionManager:
                 }
                 if user_ip not in self.stats['usuarios_unicos_hoje']:
                     self.stats['usuarios_unicos_hoje'].append(user_ip)
-                print(f"✅ Nova sessão criada: {session_id[:8]}... (IP: {user_ip})")
-                print(f"👥 Ativos: {len(self.sessoes_ativas)}/{MAX_USUARIOS_SIMULTANEOS}")
+                print(f"Nova sessão criada: {session_id[:8]}... (IP: {user_ip})")
+                print(f" Ativos: {len(self.sessoes_ativas)}/{MAX_USUARIOS_SIMULTANEOS}")
                 return session_id
             else:
-                print(f"❌ Sistema ocupado: {len(self.sessoes_ativas)}/{MAX_USUARIOS_SIMULTANEOS}")
+                print(f"Sistema ocupado: {len(self.sessoes_ativas)}/{MAX_USUARIOS_SIMULTANEOS}")
                 return None
     
     def atualizar_atividade(self, session_id):
@@ -62,31 +62,31 @@ class SessionManager:
     def get_session_data(self, session_id):
         """Retorna dados da sessão com logs detalhados"""
         if not session_id:
-            print(f"❌ [SESSION] session_id é None ou vazio")
+            print(f"[SESSION] session_id é None ou vazio")
             return None
             
         with self.lock:
             if session_id in self.sessoes_ativas:
                 # Atualizar atividade automaticamente
                 self.sessoes_ativas[session_id]['ultima_atividade'] = time.time()
-                print(f"✅ [SESSION] Sessão encontrada e atividade atualizada: {session_id[:8]}...")
+                print(f"[SESSION] Sessão encontrada e atividade atualizada: {session_id[:8]}...")
                 return self.sessoes_ativas[session_id]
             else:
-                print(f"❌ [SESSION] Sessão não encontrada: {session_id[:8]}...")
-                print(f"❌ [SESSION] Sessões disponíveis: {[sid[:8] + '...' for sid in self.sessoes_ativas.keys()]}")
+                print(f"[SESSION] Sessão não encontrada: {session_id[:8]}...")
+                print(f"[SESSION] Sessões disponíveis: {[sid[:8] + '...' for sid in self.sessoes_ativas.keys()]}")
                 return None
     
     def debug_sessoes_ativas(self):
         """Debug das sessões ativas"""
         with self.lock:
-            print(f"🔍 [DEBUG] === SESSÕES ATIVAS ({len(self.sessoes_ativas)}) ===")
+            print(f" [DEBUG] === SESSÕES ATIVAS ({len(self.sessoes_ativas)}) ===")
             if not self.sessoes_ativas:
-                print(f"🔍 [DEBUG] Nenhuma sessão ativa")
+                print(f" [DEBUG] Nenhuma sessão ativa")
             else:
                 for sid, dados in self.sessoes_ativas.items():
                     tempo_inativo = time.time() - dados['ultima_atividade']
-                    print(f"🔍 [DEBUG] {sid[:8]}... IP:{dados['ip']} Inativo:{tempo_inativo:.1f}s Requests:{dados['requests_count']}")
-            print(f"🔍 [DEBUG] ===============================")
+                    print(f" [DEBUG] {sid[:8]}... IP:{dados['ip']} Inativo:{tempo_inativo:.1f}s Requests:{dados['requests_count']}")
+            print(f" [DEBUG] ===============================")
     
     def get_chat_history(self, session_id):
         """Retorna histórico de chat da sessão"""
@@ -102,10 +102,10 @@ class SessionManager:
                 # Limitar histórico para evitar uso excessivo de memória
                 self.sessoes_ativas[session_id]['chat_history'] = history[-20:]
                 self.sessoes_ativas[session_id]['ultima_atividade'] = time.time()
-                print(f"📝 [SESSION] Histórico atualizado para {session_id[:8]}...: {len(history)} mensagens")
+                print(f"[SESSION] Histórico atualizado para {session_id[:8]}...: {len(history)} mensagens")
                 return True
             else:
-                print(f"❌ [SESSION] Tentativa de atualizar histórico de sessão inexistente: {session_id[:8]}...")
+                print(f"[SESSION] Tentativa de atualizar histórico de sessão inexistente: {session_id[:8]}...")
                 return False
     
     def remover_sessao(self, session_id, motivo="manual"):
@@ -114,8 +114,8 @@ class SessionManager:
             if session_id in self.sessoes_ativas:
                 ip = self.sessoes_ativas[session_id]['ip']
                 del self.sessoes_ativas[session_id]
-                print(f"🗑️ Sessão removida: {session_id[:8]}... - {motivo} (IP: {ip})")
-                print(f"👥 Ativos: {len(self.sessoes_ativas)}/{MAX_USUARIOS_SIMULTANEOS}")
+                print(f" Sessão removida: {session_id[:8]}... - {motivo} (IP: {ip})")
+                print(f" Ativos: {len(self.sessoes_ativas)}/{MAX_USUARIOS_SIMULTANEOS}")
                 return True
             return False
     
@@ -149,7 +149,7 @@ class SessionManager:
     
     def _cleanup_sessoes(self):
         """Thread de limpeza automática - MELHORADA"""
-        print("🧹 Thread de limpeza iniciada")
+        print(" Thread de limpeza iniciada")
         
         while True:
             try:
@@ -167,16 +167,16 @@ class SessionManager:
                     self.remover_sessao(sid, f"timeout ({tempo_inativo:.0f}s)")
                 
                 if sessoes_expiradas:
-                    print(f"🧹 {len(sessoes_expiradas)} sessões expiradas removidas")
+                    print(f" {len(sessoes_expiradas)} sessões expiradas removidas")
                 elif len(self.sessoes_ativas) > 0:
                     # Log periódico quando há sessões ativas (a cada 5 minutos)
                     if int(agora) % 300 == 0:  # A cada 5 minutos
-                        print(f"👥 {len(self.sessoes_ativas)} sessões ativas mantidas")
+                        print(f" {len(self.sessoes_ativas)} sessões ativas mantidas")
                 
                 time.sleep(CLEANUP_INTERVAL)
                 
             except Exception as e:
-                print(f"❌ Erro na limpeza: {e}")
+                print(f"Erro na limpeza: {e}")
                 time.sleep(CLEANUP_INTERVAL)
 
 # Instância global

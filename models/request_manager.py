@@ -16,22 +16,22 @@ class RequestManager:
     def __init__(self):
         self.active_requests: Dict[str, ActiveRequest] = {}
         self.lock = threading.Lock()
-        print("🔧 RequestManager inicializado")
+        print(" RequestManager inicializado")
     
     def start_request(self, session_id: str) -> str:
         """Inicia uma nova request e cancela as anteriores da sessão"""
         request_id = str(uuid.uuid4())
     
         with self.lock:
-        # ✅ VERIFICAR SE JÁ TEM REQUEST ATIVA
+        #  VERIFICAR SE JÁ TEM REQUEST ATIVA
             active_requests = [r for r in self.active_requests.values() 
                           if r.session_id == session_id and not r.cancelled]
         
         if active_requests:
-            print(f"🚫 Sessão {session_id[:8]}... já tem {len(active_requests)} request(s) ativa(s)")
+            print(f" Sessão {session_id[:8]}... já tem {len(active_requests)} request(s) ativa(s)")
             # Cancelar requests anteriores
             self.cancel_session_requests(session_id)
-            print(f"🛑 Todas as requests anteriores da sessão {session_id[:8]}... foram canceladas")
+            print(f" Todas as requests anteriores da sessão {session_id[:8]}... foram canceladas")
         
         # Criar nova request
         request = ActiveRequest(
@@ -42,7 +42,7 @@ class RequestManager:
         )
         
         self.active_requests[request_id] = request
-        print(f"🚀 Request {request_id[:8]}... iniciada para sessão {session_id[:8]}...")
+        print(f"Request {request_id[:8]}... iniciada para sessão {session_id[:8]}...")
         
         return request_id
     
@@ -51,14 +51,14 @@ class RequestManager:
         with self.lock:
             if request_id in self.active_requests:
                 del self.active_requests[request_id]
-                print(f"✅ Request {request_id[:8]}... finalizada")
+                print(f" Request {request_id[:8]}... finalizada")
     
     def cancel_request(self, request_id: str):
         """Cancela request específica"""
         with self.lock:
             if request_id in self.active_requests:
                 self.active_requests[request_id].cancelled = True
-                print(f"🛑 Request {request_id[:8]}... cancelada")
+                print(f" Request {request_id[:8]}... cancelada")
                 return True
         return False
     
@@ -69,10 +69,10 @@ class RequestManager:
             if request.session_id == session_id and not request.cancelled:
                 request.cancelled = True
                 cancelled_count += 1
-                print(f"🛑 Request {request.id[:8]}... da sessão {session_id[:8]}... cancelada")
+                print(f" Request {request.id[:8]}... da sessão {session_id[:8]}... cancelada")
         
         if cancelled_count > 0:
-            print(f"🛑 Total: {cancelled_count} requests canceladas da sessão {session_id[:8]}...")
+            print(f" Total: {cancelled_count} requests canceladas da sessão {session_id[:8]}...")
     
     def is_cancelled(self, request_id: str) -> bool:
         """Verifica se request foi cancelada"""

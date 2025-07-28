@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Titan AI - Inteligência Artificial Avançada</title>
     
-    <!-- ✅ CSRF TOKEN CRÍTICO -->
+    <!--  CSRF TOKEN CRÍTICO -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
     <link rel="stylesheet" href="/static/styles.css">
@@ -25,7 +25,7 @@
         </div>
         <div class="header-actions">
             <button class="header-feedback-btn" onclick="openFeedbackModal()" title="Reportar Problema">
-                💬 Feedback
+                 Feedback
             </button>
             <div class="status-indicator">
                 <div class="status-dot"></div>
@@ -178,28 +178,28 @@
 
             <div class="feedback-body" id="feedbackBody">
                 <form id="feedbackForm">
-                    <!-- ✅ CSRF TOKEN NO FORM -->
+                    <!--  CSRF TOKEN NO FORM -->
                     <input type="hidden" id="feedbackCsrfToken" name="csrf_token" value="">
                     <input type="hidden" id="feedbackType" name="tipo" value="geral">
 
                     <div class="feedback-type-selection">
-                        <h3>🎯 Que tipo de feedback você quer enviar?</h3>
+                        <h3> Que tipo de feedback você quer enviar?</h3>
                         <div class="feedback-types-inline">
                             <button type="button" class="feedback-type-btn" data-type="bug"
                                 onclick="selectFeedbackType('bug')">
-                                🐛 Bug/Erro
+                                Bug/Erro
                             </button>
                             <button type="button" class="feedback-type-btn" data-type="melhoria"
                                 onclick="selectFeedbackType('melhoria')">
-                                💡 Sugestão
+                                Sugestão
                             </button>
                             <button type="button" class="feedback-type-btn" data-type="problema"
                                 onclick="selectFeedbackType('problema')">
-                                ⚠️ Problema
+                                Problema
                             </button>
                             <button type="button" class="feedback-type-btn" data-type="resposta"
                                 onclick="selectFeedbackType('resposta')">
-                                🤖 Resposta Incorreta
+                                Resposta Incorreta
                             </button>
                         </div>
                     </div>
@@ -230,7 +230,7 @@
                     </div>
 
                     <div class="system-info-compact">
-                        <h4>📊 Informações coletadas automaticamente:</h4>
+                        <h4>Informações coletadas automaticamente:</h4>
                         <p>Navegador, sistema, horário e modo atual do Titan</p>
                     </div>
                 </form>

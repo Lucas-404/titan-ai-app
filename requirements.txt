@@ -1,0 +1,7 @@
+Flask
+Flask-WTF
+Flask-Limiter
+Flask-Talisman
+Flask-Caching
+requests
+yt-dlp

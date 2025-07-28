@@ -9,14 +9,14 @@ from config import CHAT_HISTORY_FILE, BACKUPS_DIR, EXPORTS_DIR, MAX_BACKUPS
 class ChatManager:
     def __init__(self):
         self.base_history_dir = Path(CHAT_HISTORY_FILE).parent / "sessions"
-        self.base_history_dir.mkdir(exist_ok=True)
+        # self.base_history_dir.mkdir(exist_ok=True) # Desabilitado para evitar criação automática
         
-        # 🔒 SEGURANÇA: Diretório base absoluto para validação
+        # SEGURANÇA: Diretório base absoluto para validação
         self.safe_base_path = self.base_history_dir.resolve()
-        print(f"📂 ChatManager inicializado - Diretório SEGURO: {self.safe_base_path}")
+        print(f" ChatManager inicializado - Diretório SEGURO: {self.safe_base_path}")
     
     def _validate_session_id(self, session_id):
-        """🔒 CRÍTICO: Validação rigorosa de session_id"""
+        """CRÍTICO: Validação rigorosa de session_id"""
         if not session_id:
             raise ValueError("session_id é obrigatório")
         
@@ -45,7 +45,7 @@ class ChatManager:
         return session_id
     
     def _get_safe_session_dir(self, session_id):
-        """🔒 CRÍTICO: Criação segura de diretório de sessão"""
+        """CRÍTICO: Criação segura de diretório de sessão"""
         # 1. Validar session_id primeiro
         safe_session_id = self._validate_session_id(session_id)
         
@@ -67,11 +67,11 @@ class ChatManager:
         # 6. Criar diretório se não existir
         resolved_session_dir.mkdir(exist_ok=True)
         
-        print(f"🔒 Diretório seguro criado: {resolved_session_dir}")
+        print(f"Diretório seguro criado: {resolved_session_dir}")
         return resolved_session_dir
     
     def _get_session_file(self, session_id):
-        """🔒 BLINDADO: Retorna arquivo específico da sessão"""
+        """BLINDADO: Retorna arquivo específico da sessão"""
         try:
             # 1. Obter diretório seguro
             session_dir = self._get_safe_session_dir(session_id)
@@ -94,12 +94,12 @@ class ChatManager:
             return resolved_file
             
         except Exception as e:
-            print(f"🚨 SECURITY ALERT: Tentativa de acesso inseguro - session_id: {session_id[:20]}...")
-            print(f"🚨 Erro: {str(e)}")
+            print(f" SECURITY ALERT: Tentativa de acesso inseguro - session_id: {session_id[:20]}...")
+            print(f" Erro: {str(e)}")
             raise ValueError("Acesso negado por motivos de segurança")
     
     def _sanitize_filename(self, filename):
-        """🔒 Sanitização de nomes de arquivo"""
+        """Sanitização de nomes de arquivo"""
         if not filename or not isinstance(filename, str):
             return "arquivo_seguro"
         
@@ -120,7 +120,7 @@ class ChatManager:
         return filename
     
     def load_history(self, session_id=None):
-        """🔒 SEGURO: Carregar histórico APENAS da sessão específica"""
+        """SEGURO: Carregar histórico APENAS da sessão específica"""
         if not session_id:
             return []
         
@@ -131,7 +131,7 @@ class ChatManager:
                 # Verificar tamanho do arquivo (proteção DoS)
                 file_size = session_file.stat().st_size
                 if file_size > 50 * 1024 * 1024:  # 50MB máximo
-                    print(f"⚠️ Arquivo muito grande: {file_size} bytes")
+                    print(f" Arquivo muito grande: {file_size} bytes")
                     return []
                 
                 with open(session_file, 'r', encoding='utf-8') as f:
@@ -139,35 +139,35 @@ class ChatManager:
                 
                 # Validar estrutura dos dados
                 if not isinstance(data, list):
-                    print(f"❌ Estrutura inválida do arquivo")
+                    print(f" Estrutura inválida do arquivo")
                     return []
                 
                 # Limitar número de conversas (proteção memória)
                 if len(data) > 1000:
-                    print(f"⚠️ Muitas conversas, limitando a 1000")
+                    print(f" Muitas conversas, limitando a 1000")
                     data = data[:1000]
                 
-                print(f"📂 Histórico carregado SEGURAMENTE da sessão {session_id[:8]}...: {len(data)} conversas")
+                print(f" Histórico carregado SEGURAMENTE da sessão {session_id[:8]}...: {len(data)} conversas")
                 return data
             
-            print(f"📂 Nenhum histórico para sessão {session_id[:8]}... - criando novo")
+            print(f" Nenhum histórico para sessão {session_id[:8]}... - criando novo")
             return []
             
         except Exception as e:
-            print(f"❌ Erro SEGURO ao carregar histórico da sessão {session_id[:8]}...: {str(e)[:100]}")
+            print(f" Erro SEGURO ao carregar histórico da sessão {session_id[:8]}...: {str(e)[:100]}")
             return []
     
     def save_history(self, chat_history, session_id=None):
         if not session_id:
-            print("❌ session_id é obrigatório para salvar histórico")
+            print(" session_id é obrigatório para salvar histórico")
             return False
         
         if not isinstance(chat_history, list):
-            print("❌ chat_history deve ser uma lista")
+            print(" chat_history deve ser uma lista")
             return False
         
         if len(chat_history) > 1000:
-            print("⚠️ Muitas conversas, limitando a 1000")
+            print(" Muitas conversas, limitando a 1000")
             chat_history = chat_history[:1000]
         
         try:
@@ -193,15 +193,15 @@ class ChatManager:
         
             os.chmod(session_file, 0o600)
         
-            print(f"💾 Histórico salvo SEGURAMENTE para sessão {session_id[:8]}...: {len(updated_history)} conversas")
+            print(f" Histórico salvo SEGURAMENTE para sessão {session_id[:8]}...: {len(updated_history)} conversas")
             return True
         
         except Exception as e:
-            print(f"❌ Erro SEGURO ao salvar histórico da sessão {session_id[:8]}...: {str(e)[:100]}")
+            print(f" Erro SEGURO ao salvar histórico da sessão {session_id[:8]}...: {str(e)[:100]}")
             return False
     
     def _get_safe_backup_dir(self, session_id):
-        """🔒 Diretório seguro para backups"""
+        """Diretório seguro para backups"""
         safe_session_id = self._validate_session_id(session_id)
         backup_base = Path(BACKUPS_DIR).resolve()
         backup_dir = backup_base / safe_session_id[:8]
@@ -217,7 +217,7 @@ class ChatManager:
         return resolved_backup
     
     def _create_backup(self, session_id):
-        """🔒 SEGURO: Criar backup automático da sessão"""
+        """SEGURO: Criar backup automático da sessão"""
         try:
             session_file = self._get_session_file(session_id)
             if not session_file.exists():
@@ -246,13 +246,13 @@ class ChatManager:
             
             # Limpar backups antigos da sessão
             self._cleanup_old_backups(session_id)
-            print(f"🔄 Backup SEGURO criado para sessão {session_id[:8]}...: {backup_file.name}")
+            print(f" Backup SEGURO criado para sessão {session_id[:8]}...: {backup_file.name}")
             
         except Exception as e:
-            print(f"❌ Erro SEGURO ao criar backup da sessão {session_id[:8]}...: {str(e)[:100]}")
+            print(f" Erro SEGURO ao criar backup da sessão {session_id[:8]}...: {str(e)[:100]}")
     
     def _cleanup_old_backups(self, session_id):
-        """🔒 SEGURO: Manter apenas os últimos backups da sessão"""
+        """SEGURO: Manter apenas os últimos backups da sessão"""
         try:
             backup_dir = self._get_safe_backup_dir(session_id)
             
@@ -274,24 +274,24 @@ class ChatManager:
                 # Verificação final antes de deletar
                 if oldest.parent == backup_dir:
                     oldest.unlink()
-                    print(f"🗑️ Backup antigo removido SEGURAMENTE da sessão {session_id[:8]}...: {oldest.name}")
+                    print(f"Backup antigo removido SEGURAMENTE da sessão {session_id[:8]}...: {oldest.name}")
                 
         except Exception as e:
-            print(f"❌ Erro SEGURO ao limpar backups da sessão {session_id[:8]}...: {str(e)[:100]}")
+            print(f" Erro SEGURO ao limpar backups da sessão {session_id[:8]}...: {str(e)[:100]}")
     
     def get_chat_by_id(self, chat_id, session_id=None):
-        """🔒 SEGURO: Buscar chat por ID APENAS na sessão específica"""
+        """SEGURO: Buscar chat por ID APENAS na sessão específica"""
         if not session_id:
-            print("❌ session_id é obrigatório para buscar chat")
+            print(" session_id é obrigatório para buscar chat")
             return None
         
         if not chat_id or not isinstance(chat_id, str):
-            print("❌ chat_id inválido")
+            print(" chat_id inválido")
             return None
         
         # Limitar tamanho do chat_id
         if len(chat_id) > 100:
-            print("❌ chat_id muito longo")
+            print(" chat_id muito longo")
             return None
         
         history = self.load_history(session_id=session_id)
@@ -303,19 +303,19 @@ class ChatManager:
             if chat.get('id') == chat_id:
                 # Verificação DUPLA de segurança
                 if chat.get('session_id') != session_id:
-                    print(f"🚫 ALERTA DE SEGURANÇA: Chat {chat_id[:20]} com session_id inconsistente!")
+                    print(f" ALERTA DE SEGURANÇA: Chat {chat_id[:20]} com session_id inconsistente!")
                     return None
                 return chat
         
-        print(f"❌ Chat {chat_id[:20]} não encontrado na sessão {session_id[:8]}...")
+        print(f" Chat {chat_id[:20]} não encontrado na sessão {session_id[:8]}...")
         return None
     
     def save_chat(self, chat_data):
-        """🔒 SEGURO: Salvar conversa específica NA SESSÃO CORRETA"""
+        """SEGURO: Salvar conversa específica NA SESSÃO CORRETA"""
         session_id = chat_data.get('session_id') if isinstance(chat_data, dict) else None
         
         if not session_id:
-            print("❌ session_id é obrigatório no chat_data")
+            print(" session_id é obrigatório no chat_data")
             return {'status': 'erro', 'message': 'session_id é obrigatório'}
         
         # Validar estrutura do chat_data
@@ -348,12 +348,12 @@ class ChatManager:
             # Atualizar conversa existente
             history[existing_index] = chat_data
             action = 'atualizada'
-            print(f"🔄 Conversa atualizada SEGURAMENTE na sessão {session_id[:8]}...: {chat_data.get('title', 'Sem título')[:30]}")
+            print(f" Conversa atualizada SEGURAMENTE na sessão {session_id[:8]}...: {chat_data.get('title', 'Sem título')[:30]}")
         else:
             # Nova conversa
             history.insert(0, chat_data)
             action = 'criada'
-            print(f"🆕 Nova conversa criada SEGURAMENTE na sessão {session_id[:8]}...: {chat_data.get('title', 'Sem título')[:30]}")
+            print(f" Nova conversa criada SEGURAMENTE na sessão {session_id[:8]}...: {chat_data.get('title', 'Sem título')[:30]}")
         
         # Salvar SEM backup automático
         try:
@@ -371,21 +371,21 @@ class ChatManager:
             # Permissões seguras
             os.chmod(session_file, 0o600)
             
-            print(f"💾 Histórico salvo SEGURAMENTE para sessão {session_id[:8]}... SEM backup: {len(history)} conversas")
+            print(f" Histórico salvo SEGURAMENTE para sessão {session_id[:8]}... SEM backup: {len(history)} conversas")
             return {'status': 'sucesso', 'action': action, 'chat_id': chat_id}
         
         except Exception as e:
-            print(f"❌ Erro SEGURO ao salvar histórico da sessão {session_id[:8]}...: {str(e)[:100]}")
+            print(f" Erro SEGURO ao salvar histórico da sessão {session_id[:8]}...: {str(e)[:100]}")
             return {'status': 'erro', 'message': 'Erro ao salvar'}
     
     def delete_chat(self, chat_id, session_id=None):
-        """🔒 SEGURO: Excluir chat APENAS da sessão específica"""
+        """SEGURO: Excluir chat APENAS da sessão específica"""
         if not session_id:
-            print("❌ session_id é obrigatório para deletar chat")
+            print(" session_id é obrigatório para deletar chat")
             return {'status': 'erro', 'message': 'session_id é obrigatório'}
         
         if not chat_id or not isinstance(chat_id, str) or len(chat_id) > 100:
-            print("❌ chat_id inválido")
+            print(" chat_id inválido")
             return {'status': 'erro', 'message': 'chat_id inválido'}
         
         # Carregar histórico APENAS da sessão
@@ -402,7 +402,7 @@ class ChatManager:
             if chat.get('id') == chat_id:
                 # Verificação DUPLA de segurança
                 if chat.get('session_id') != session_id:
-                    print(f"🚫 ALERTA DE SEGURANÇA: Tentativa de deletar chat de outra sessão!")
+                    print(f" ALERTA DE SEGURANÇA: Tentativa de deletar chat de outra sessão!")
                     return {'status': 'erro', 'message': 'Chat não encontrado ou sem permissão'}
                 chat_to_delete = chat
             else:
@@ -410,14 +410,14 @@ class ChatManager:
         
         if chat_to_delete:
             if self.save_history(history_filtered, session_id=session_id):
-                print(f"🗑️ Conversa excluída SEGURAMENTE da sessão {session_id[:8]}...: {chat_to_delete.get('title', 'Sem título')[:30]}")
+                print(f"Conversa excluída SEGURAMENTE da sessão {session_id[:8]}...: {chat_to_delete.get('title', 'Sem título')[:30]}")
                 return {'status': 'sucesso', 'message': 'Conversa excluída'}
             return {'status': 'erro', 'message': 'Falha ao salvar após exclusão'}
         
         return {'status': 'erro', 'message': 'Conversa não encontrada'}
     
     def export_chat(self, chat_id, session_id=None):
-        """🔒 SEGURO: Exportar conversa específica DA SESSÃO"""
+        """SEGURO: Exportar conversa específica DA SESSÃO"""
         if not session_id:
             return {'status': 'erro', 'message': 'session_id é obrigatório'}
         
@@ -462,7 +462,7 @@ class ChatManager:
             # Permissões seguras
             os.chmod(resolved_export, 0o600)
             
-            print(f"📤 Conversa exportada SEGURAMENTE da sessão {session_id[:8]}...: {filename}")
+            print(f"Conversa exportada SEGURAMENTE da sessão {session_id[:8]}...: {filename}")
             return {
                 'status': 'sucesso',
                 'filename': filename,
@@ -470,11 +470,11 @@ class ChatManager:
             }
             
         except Exception as e:
-            print(f"❌ Erro SEGURO ao exportar da sessão {session_id[:8]}...: {str(e)[:100]}")
+            print(f" Erro SEGURO ao exportar da sessão {session_id[:8]}...: {str(e)[:100]}")
             return {'status': 'erro', 'message': 'Erro ao exportar'}
     
     def create_manual_backup(self, session_id=None):
-        """🔒 SEGURO: Criar backup manual DA SESSÃO"""
+        """SEGURO: Criar backup manual DA SESSÃO"""
         if not session_id:
             return {'status': 'erro', 'message': 'session_id é obrigatório'}
         
@@ -502,7 +502,7 @@ class ChatManager:
             # Permissões seguras
             os.chmod(resolved_backup_file, 0o600)
             
-            print(f"💾 Backup manual SEGURO criado para sessão {session_id[:8]}...: {backup_file.name}")
+            print(f" Backup manual SEGURO criado para sessão {session_id[:8]}...: {backup_file.name}")
             return {
                 'status': 'sucesso',
                 'filename': backup_file.name,
@@ -510,11 +510,11 @@ class ChatManager:
             }
             
         except Exception as e:
-            print(f"❌ Erro SEGURO ao criar backup manual da sessão {session_id[:8]}...: {str(e)[:100]}")
+            print(f" Erro SEGURO ao criar backup manual da sessão {session_id[:8]}...: {str(e)[:100]}")
             return {'status': 'erro', 'message': 'Erro ao criar backup'}
     
     def get_stats(self, session_id=None):
-        """🔒 SEGURO: Estatísticas DA SESSÃO ESPECÍFICA"""
+        """SEGURO: Estatísticas DA SESSÃO ESPECÍFICA"""
         if not session_id:
             return {'status': 'erro', 'message': 'session_id é obrigatório'}
         
@@ -558,7 +558,7 @@ class ChatManager:
             }
             
         except Exception as e:
-            print(f"❌ Erro SEGURO ao obter estatísticas da sessão {session_id[:8]}...: {str(e)[:100]}")
+            print(f" Erro SEGURO ao obter estatísticas da sessão {session_id[:8]}...: {str(e)[:100]}")
             return {'status': 'erro', 'message': 'Erro ao obter estatísticas'}
 
 # Instância global SEGURA

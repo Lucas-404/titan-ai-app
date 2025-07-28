@@ -19,7 +19,7 @@ def deletar_dados(chave, session_id=None):
     if not session_id:
         return {"status": "erro", "mensagem": "session_id é obrigatório para isolamento"}
     
-    # 🔧 CORREÇÃO: A função JÁ está implementada!
+    #  CORREÇÃO: A função JÁ está implementada!
     return db_manager.deletar_dados(chave, session_id=session_id)
 
 def listar_categorias(session_id=None):
@@ -27,5 +27,5 @@ def listar_categorias(session_id=None):
     if not session_id:
         return {"status": "erro", "mensagem": "session_id é obrigatório para isolamento"}
     
-    # 🔧 CORREÇÃO: A função JÁ está implementada!
+    #  CORREÇÃO: A função JÁ está implementada!
     return db_manager.listar_categorias(session_id=session_id)

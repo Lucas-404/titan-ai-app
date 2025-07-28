@@ -9,7 +9,7 @@ class FeedbackManager:
     def __init__(self):
         self.db_file = DATABASE_FILE
         self.init_feedback_database()
-        print("📝 FeedbackManager inicializado")
+        print("FeedbackManager inicializado")
     
     def init_feedback_database(self):
         """Criar tabela de feedbacks se não existir"""
@@ -81,7 +81,7 @@ class FeedbackManager:
             conn.commit()
             conn.close()
             
-            print(f"📝 Feedback criado: {feedback_id} - {feedback_data.get('titulo')}")
+            print(f"Feedback criado: {feedback_id} - {feedback_data.get('titulo')}")
             
             return {
                 'status': 'sucesso',
@@ -90,7 +90,7 @@ class FeedbackManager:
             }
             
         except Exception as e:
-            print(f"❌ Erro ao criar feedback: {e}")
+            print(f" Erro ao criar feedback: {e}")
             return {
                 'status': 'erro',
                 'message': f'Erro ao salvar feedback: {str(e)}'
@@ -151,7 +151,7 @@ class FeedbackManager:
             }
             
         except Exception as e:
-            print(f"❌ Erro ao listar feedbacks: {e}")
+            print(f" Erro ao listar feedbacks: {e}")
             return {
                 'status': 'erro',
                 'message': str(e)
@@ -192,7 +192,7 @@ class FeedbackManager:
             }
             
         except Exception as e:
-            print(f"❌ Erro ao obter feedback: {e}")
+            print(f" Erro ao obter feedback: {e}")
             return {
                 'status': 'erro',
                 'message': str(e)
@@ -220,7 +220,7 @@ class FeedbackManager:
             conn.commit()
             conn.close()
             
-            print(f"📝 Feedback {feedback_id} atualizado para: {novo_status}")
+            print(f"Feedback {feedback_id} atualizado para: {novo_status}")
             
             return {
                 'status': 'sucesso',
@@ -228,7 +228,7 @@ class FeedbackManager:
             }
             
         except Exception as e:
-            print(f"❌ Erro ao atualizar feedback: {e}")
+            print(f" Erro ao atualizar feedback: {e}")
             return {
                 'status': 'erro',
                 'message': str(e)
@@ -290,7 +290,7 @@ class FeedbackManager:
             }
             
         except Exception as e:
-            print(f"❌ Erro ao obter estatísticas: {e}")
+            print(f" Erro ao obter estatísticas: {e}")
             return {
                 'status': 'erro',
                 'message': str(e)

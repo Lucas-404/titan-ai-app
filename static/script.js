@@ -22,7 +22,7 @@ let userMessageCount = 0; // Contador de mensagens do usuário
 let feedbackShown = false; // Se já mostrou o feedback
 let isGenerating = false; // Estado de geração ativa
 
-// ✅ CSRF Token
+//  CSRF Token
 let csrfToken = null;
 
 // =================== 🔒 FUNÇÕES DE SEGURANÇA ===================
@@ -34,7 +34,7 @@ function escapeHtml(text) {
         return '';
     }
 
-    // ✅ ADICIONAR O CÓDIGO QUE FALTAVA:
+    //  ADICIONAR O CÓDIGO QUE FALTAVA:
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
@@ -147,7 +147,7 @@ function getHeaders() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Titan Chat - Sistema carregado!');
 
-    // ✅ INICIALIZAR CSRF TOKEN PRIMEIRO
+    //  INICIALIZAR CSRF TOKEN PRIMEIRO
     initializeCsrfToken();
 
     clearCurrentSession();
@@ -304,7 +304,7 @@ function cancelCurrentRequest() {
     if (currentRequest) {
         console.log('🛑 Cancelando request...');
 
-        // ✅ CANCELAR NO FRONTEND PRIMEIRO
+        //  CANCELAR NO FRONTEND PRIMEIRO
         try {
             currentRequest.abort();
         } catch (abortError) {
@@ -313,7 +313,7 @@ function cancelCurrentRequest() {
         
         currentRequest = null;
 
-        // ✅ INFORMAR O BACKEND (sem esperar resposta)
+        //  INFORMAR O BACKEND (sem esperar resposta)
         fetch('/cancel-request', {
             method: 'POST',
             headers: getHeaders(),
@@ -323,20 +323,20 @@ function cancelCurrentRequest() {
             console.warn('⚠️ Backend cancel falhou:', error);
         });
 
-        // ✅ LIMPAR INTERFACE
+        //  LIMPAR INTERFACE
         if (thinking) {
             thinking.style.display = 'none';
         }
 
         updateSendButtonState(false);
 
-        // ✅ MENSAGEM DE CANCELAMENTO
+        //  MENSAGEM DE CANCELAMENTO
         addMessageToChat('🛑 Geração cancelada', false, {
             modo: 'Sistema',
             tempo_resposta: '0ms'
         });
 
-        console.log('✅ Request cancelado com sucesso');
+        console.log(' Request cancelado com sucesso');
         return true;
     }
 
@@ -472,7 +472,7 @@ function setupKeyboardShortcuts() {
     });
 }
 
-// =================== 🌊 STREAMING REAL ===================
+// ===================  STREAMING REAL ===================
 async function handleSendMessage() {
     // Se está gerando, cancelar em vez de enviar
     if (isGenerating && currentRequest) {
@@ -509,7 +509,7 @@ async function sendMessageToServer(message) {
         startNewSession();
     }
 
-    // ✅ ADICIONAR COMANDO AUTOMATICAMENTE BASEADO NO THINKING MODE
+    //  ADICIONAR COMANDO AUTOMATICAMENTE BASEADO NO THINKING MODE
     let finalMessage = message.trim();
 
     // Verificar se já tem comando manual
@@ -534,16 +534,16 @@ async function sendMessageToServer(message) {
 
     conversationHistory.push({
         role: 'user',
-        content: message, // ✅ Salvar a mensagem original sem comando
+        content: message, //  Salvar a mensagem original sem comando
         timestamp: new Date().toISOString()
     });
 
     const streamContainer = createStreamingContainer();
 
     try {
-        console.log('🌊 Iniciando streaming com mensagem:', finalMessage);
+        console.log(' Iniciando streaming com mensagem:', finalMessage);
 
-        // ✅ ENVIAR A MENSAGEM COM COMANDO PARA O BACKEND
+        //  ENVIAR A MENSAGEM COM COMANDO PARA O BACKEND
         await streamWithFetchStream(finalMessage, streamContainer);
 
     } catch (error) {
@@ -568,7 +568,7 @@ async function sendChatMessage() {
     const message = chatInput?.value?.trim();
     if (!message) return;
 
-    // ✅ ADICIONAR COMANDO AUTOMATICAMENTE
+    //  ADICIONAR COMANDO AUTOMATICAMENTE
     let finalMessage = message.trim();
 
     const hasManualCommand = finalMessage.includes('/think') || finalMessage.includes('/no_think');
@@ -585,21 +585,21 @@ async function sendChatMessage() {
 
     console.log('📤 Enviando do chat:', finalMessage);
 
-    addMessageToChat(message, true); // ✅ Mostrar mensagem original
+    addMessageToChat(message, true); //  Mostrar mensagem original
     chatInput.value = '';
     chatInput.style.height = 'auto';
-    await sendMessageToServer(finalMessage); // ✅ Enviar com comando
+    await sendMessageToServer(finalMessage); //  Enviar com comando
 }
 
 async function streamWithFetchStream(message, container) {
     return new Promise((resolve, reject) => {
-        console.log('🌊 Iniciando stream para:', message);
+        console.log(' Iniciando stream para:', message);
         
-        // ✅ TIMEOUT MAIOR PARA OLLAMA
+        //  TIMEOUT MAIOR PARA OLLAMA
         const timeoutMs = 60000; // 60 segundos para Ollama responder
         let timeoutId = null;
 
-        // ✅ TIMEOUT MANUAL EM VEZ DE DEIXAR O BROWSER DECIDIR
+        //  TIMEOUT MANUAL EM VEZ DE DEIXAR O BROWSER DECIDIR
         timeoutId = setTimeout(() => {
             if (currentRequest && !currentRequest.signal.aborted) {
                 console.warn('⏰ Timeout manual - cancelando request');
@@ -618,13 +618,13 @@ async function streamWithFetchStream(message, container) {
             signal: currentRequest.signal
         })
         .then(response => {
-            // ✅ LIMPAR TIMEOUT SE RESPOSTA CHEGOU
+            //  LIMPAR TIMEOUT SE RESPOSTA CHEGOU
             if (timeoutId) {
                 clearTimeout(timeoutId);
                 timeoutId = null;
             }
 
-            console.log('📡 Response status:', response.status, 'headers:', Object.fromEntries(response.headers.entries()));
+            console.log(' Response status:', response.status, 'headers:', Object.fromEntries(response.headers.entries()));
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -650,10 +650,10 @@ async function streamWithFetchStream(message, container) {
 
             function processStream() {
                 return reader.read().then(({ done, value }) => {
-                    // ✅ ATUALIZAR TIMESTAMP DE ATIVIDADE
+                    //  ATUALIZAR TIMESTAMP DE ATIVIDADE
                     lastUpdateTime = Date.now();
 
-                    // ✅ VERIFICAR ABORT MAIS CUIDADOSAMENTE
+                    //  VERIFICAR ABORT MAIS CUIDADOSAMENTE
                     if (currentRequest && currentRequest.signal.aborted) {
                         console.log('🛑 Stream abortado pelo usuário');
                         reader.cancel('Usuário cancelou');
@@ -661,9 +661,9 @@ async function streamWithFetchStream(message, container) {
                     }
 
                     if (done) {
-                        console.log('✅ Stream concluído naturalmente - Content length:', fullContent.length);
+                        console.log(' Stream concluído naturalmente - Content length:', fullContent.length);
                         
-                        // ✅ VERIFICAR SE REALMENTE TEM CONTEÚDO
+                        //  VERIFICAR SE REALMENTE TEM CONTEÚDO
                         if (!fullContent || fullContent.trim().length === 0) {
                             console.warn('⚠️ Stream terminou sem conteúdo!');
                             reject(new Error('Stream terminou sem conteúdo'));
@@ -681,21 +681,21 @@ async function streamWithFetchStream(message, container) {
                         return processStream();
                     }
 
-                    // ✅ DECODIFICAR COM TRATAMENTO DE ERRO
+                    //  DECODIFICAR COM TRATAMENTO DE ERRO
                     let decodedChunk;
                     try {
                         decodedChunk = decoder.decode(value, { stream: true });
                     } catch (decodeError) {
-                        console.error('❌ Erro ao decodificar chunk:', decodeError);
+                        console.error(' Erro ao decodificar chunk:', decodeError);
                         return processStream();
                     }
 
-                    // ✅ DEBUG DO CHUNK RECEBIDO
-                    console.log('📦 Chunk recebido:', decodedChunk.length, 'bytes');
+                    //  DEBUG DO CHUNK RECEBIDO
+                    console.log('Chunk recebido:', decodedChunk.length, 'bytes');
 
                     buffer += decodedChunk;
                     
-                    // ✅ PROCESSAR LINHAS COM MELHOR HANDLING
+                    //  PROCESSAR LINHAS COM MELHOR HANDLING
                     const lines = buffer.split('\n');
                     // Manter última linha incompleta no buffer
                     buffer = lines.pop() || ''; 
@@ -716,13 +716,13 @@ async function streamWithFetchStream(message, container) {
                                 hasValidData = true;
 
                                 if (data.error) {
-                                    console.error('❌ Erro do servidor:', data.error);
+                                    console.error(' Erro do servidor:', data.error);
                                     showError(data.error);
                                     reject(new Error(data.error));
                                     return;
                                 }
 
-                                // ✅ THINKING PROCESSING
+                                //  THINKING PROCESSING
                                 if (data.type === 'thinking_done') {
                                     thinkingContent = data.thinking || '';
                                     console.log('🧠 Thinking recebido:', thinkingContent.length, 'chars');
@@ -735,7 +735,7 @@ async function streamWithFetchStream(message, container) {
                                     }
                                 }
 
-                                // ✅ CONTENT UPDATE COM DEBUG
+                                //  CONTENT UPDATE COM DEBUG
                                 else if (data.type === 'content') {
                                     const newContent = data.buffer || data.content || '';
                                     if (newContent !== fullContent) {
@@ -750,7 +750,7 @@ async function streamWithFetchStream(message, container) {
                                     }
                                 }
 
-                                // ✅ COMPLETION
+                                //  COMPLETION
                                 else if (data.type === 'done') {
                                     console.log('🏁 Stream marcado como concluído pelo servidor');
                                     fullContent = data.final_content || fullContent;
@@ -766,16 +766,16 @@ async function streamWithFetchStream(message, container) {
                         }
                     }
 
-                    // ✅ SE NÃO RECEBEU DADOS VÁLIDOS HÁ MUITO TEMPO, AVISAR
+                    //  SE NÃO RECEBEU DADOS VÁLIDOS HÁ MUITO TEMPO, AVISAR
                     if (!hasValidData && (Date.now() - lastUpdateTime) > 30000) {
                         console.warn('⚠️ Sem dados válidos há 30s, possível problema na conexão');
                     }
 
-                    // ✅ CONTINUAR STREAM
+                    //  CONTINUAR STREAM
                     return processStream();
                 })
                 .catch(streamError => {
-                    // ✅ LIMPAR TIMEOUT EM CASO DE ERRO
+                    //  LIMPAR TIMEOUT EM CASO DE ERRO
                     if (timeoutId) {
                         clearTimeout(timeoutId);
                         timeoutId = null;
@@ -785,7 +785,7 @@ async function streamWithFetchStream(message, container) {
                         console.log('🛑 Stream cancelado intencionalmente');
                         return Promise.resolve();
                     } else {
-                        console.error('❌ Erro no stream:', streamError);
+                        console.error(' Erro no stream:', streamError);
                         throw streamError;
                     }
                 });
@@ -794,7 +794,7 @@ async function streamWithFetchStream(message, container) {
             return processStream();
         })
         .catch(error => {
-            // ✅ LIMPAR TIMEOUT EM CASO DE ERRO
+            //  LIMPAR TIMEOUT EM CASO DE ERRO
             if (timeoutId) {
                 clearTimeout(timeoutId);
                 timeoutId = null;
@@ -804,7 +804,7 @@ async function streamWithFetchStream(message, container) {
                 console.log('🛑 Fetch cancelado intencionalmente');
                 return Promise.resolve();
             } else {
-                console.error('❌ Erro na requisição:', error);
+                console.error(' Erro na requisição:', error);
                 showError('Erro na conexão: ' + error.message);
                 reject(error);
             }
@@ -812,7 +812,7 @@ async function streamWithFetchStream(message, container) {
     });
 }
 
-// ✅ SCROLL INSTANTÂNEO
+//  SCROLL INSTANTÂNEO
 function scrollToBottom() {
     const messagesContainer = document.getElementById('chatMessages');
     if (messagesContainer) {
@@ -820,18 +820,18 @@ function scrollToBottom() {
     }
 }
 
-// ✅ FORMATAÇÃO ULTRA-RÁPIDA
+//  FORMATAÇÃO ULTRA-RÁPIDA
 function formatMessage(content) {
     if (!content || typeof content !== 'string') {
         return '';
     }
 
-    // ✅ ESCAPE RÁPIDO
+    //  ESCAPE RÁPIDO
     const div = document.createElement('div');
     div.textContent = content;
     let safeContent = div.innerHTML;
     
-    // ✅ FORMATAÇÃO MÍNIMA E RÁPIDA
+    //  FORMATAÇÃO MÍNIMA E RÁPIDA
     return safeContent
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -839,7 +839,7 @@ function formatMessage(content) {
         .replace(/\n/g, '<br>');
 }
 
-// ✅ NOVA FUNÇÃO: Criar container de thinking em tempo real
+//  NOVA FUNÇÃO: Criar container de thinking em tempo real
 function createThinkingContainer(messageContainer) {
     const assistantDiv = messageContainer.querySelector('.assistant-message');
     if (!assistantDiv) return null;
@@ -870,7 +870,7 @@ function createThinkingContainer(messageContainer) {
     return thinkingContainer;
 }
 
-// ✅ NOVA FUNÇÃO: Atualizar thinking em tempo real
+//  NOVA FUNÇÃO: Atualizar thinking em tempo real
 function updateThinkingContent(thinkingContainer, content) {
     if (!thinkingContainer) return;
 
@@ -883,7 +883,7 @@ function updateThinkingContent(thinkingContainer, content) {
     }
 }
 
-// ✅ FUNÇÕES DE STREAMING REAL
+//  FUNÇÕES DE STREAMING REAL
 function createStreamingContainer() {
     const messagesContainer = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
@@ -918,7 +918,7 @@ function finalizeStreamingMessage(container, content, thinking = null) {
     const assistantDiv = container.querySelector('.assistant-message');
     if (!assistantDiv) return;
 
-    // ✅ ADICIONAR THINKING SE PRESENTE
+    //  ADICIONAR THINKING SE PRESENTE
     if (thinking && thinking.trim() && currentThinkingMode) {
         assistantDiv.innerHTML = `
             <div class="thinking-container">
@@ -1151,7 +1151,7 @@ function scrollToBottom() {
 
 function showError(message) {
     const safeMessage = escapeHtml(message);
-    addMessageToChat(`❌ Erro: ${safeMessage}`, false);
+    addMessageToChat(` Erro: ${safeMessage}`, false);
     console.error('Erro no chat:', message);
 }
 
@@ -1209,23 +1209,23 @@ async function toggleThinkingClean() {
         });
 
         const data = await response.json();
-        console.log('✅ Resposta do servidor:', data);
+        console.log(' Resposta do servidor:', data);
 
         if (data.status === 'sucesso') {
             currentThinkingMode = newMode;
             applyTheme(currentThinkingMode);
             updateThinkingToggleVisual();
 
-            console.log('✅ Thinking mode atualizado:', currentThinkingMode ? 'ATIVADO' : 'DESATIVADO');
+            console.log(' Thinking mode atualizado:', currentThinkingMode ? 'ATIVADO' : 'DESATIVADO');
 
             // Mostrar feedback visual
             showToast(`🧠 Modo ${currentThinkingMode ? 'Raciocínio' : 'Direto'} ativado`, 'success');
         } else {
-            console.error('❌ Erro do servidor:', data);
+            console.error(' Erro do servidor:', data);
             throw new Error('Falha no servidor');
         }
     } catch (error) {
-        console.error('❌ Erro ao alterar thinking mode:', error);
+        console.error(' Erro ao alterar thinking mode:', error);
         // Fallback: aplicar localmente mesmo com erro
         currentThinkingMode = newMode;
         applyTheme(currentThinkingMode);
@@ -1360,7 +1360,7 @@ function startNewChat() {
         setTimeout(() => mainInput.focus(), 100);
     }
 
-    console.log('✅ Reset completo para welcome');
+    console.log(' Reset completo para welcome');
 }
 
 function focusCurrentInput() {
@@ -1522,7 +1522,7 @@ function setupThinkingModeClickOutside() {
 }
 
 function debugSessionInfo() {
-    console.log('🔍 DEBUG Sessão:', {
+    console.log('DEBUG Sessão:', {
         sessionId: sessionId ? sessionId.substring(0, 8) + '...' : 'null',
         isInChatMode: isInChatMode,
         conversationHistory: conversationHistory.length,
@@ -1576,7 +1576,7 @@ function showToast(message, type = 'info') {
 // =================== DEBUG FUNCTION ===================
 // =================== DEBUG MELHORADO ===================
 function debugConnection() {
-    console.log('🔍 === DEBUG CONEXÃO ===');
+    console.log('=== DEBUG CONEXÃO ===');
     console.log('Estado atual:', {
         currentRequest: !!currentRequest,
         isGenerating: isGenerating,
@@ -1592,18 +1592,18 @@ function debugConnection() {
         signal: testController.signal 
     })
     .then(response => {
-        console.log('✅ Conexão OK -', Date.now() - startTime, 'ms');
+        console.log(' Conexão OK -', Date.now() - startTime, 'ms');
         return response.json();
     })
     .then(data => {
-        console.log('📊 Status do servidor:', data);
+        console.log(' Status do servidor:', data);
     })
     .catch(error => {
-        console.log('❌ Erro de conexão:', error);
+        console.log(' Erro de conexão:', error);
     });
     
     // Testar streaming básico
-    console.log('🌊 Testando stream...');
+    console.log(' Testando stream...');
     fetch('/chat-stream', {
         method: 'POST',
         headers: getHeaders(),
@@ -1613,15 +1613,15 @@ function debugConnection() {
         })
     })
     .then(response => {
-        console.log('📡 Stream response:', response.status, response.headers.get('content-type'));
+        console.log(' Stream response:', response.status, response.headers.get('content-type'));
         if (response.body) {
-            console.log('✅ Response body disponível');
+            console.log(' Response body disponível');
         } else {
-            console.log('❌ Response body NULL');
+            console.log(' Response body NULL');
         }
     })
     .catch(error => {
-        console.log('❌ Erro no stream test:', error);
+        console.log(' Erro no stream test:', error);
     });
 }
 
@@ -1640,4 +1640,4 @@ window.toggleThinking = toggleThinking;
 window.cancelCurrentRequest = cancelCurrentRequest;
 window.showToast = showToast;
 
-console.log('🌊 Titan Chat - Sistema com STREAMING REAL carregado! 🚀');
+console.log(' Titan Chat - Sistema com STREAMING REAL carregado! 🚀');

@@ -6,7 +6,7 @@ class ToolsManager:
     def __init__(self):
         self._tools_cache = None
         self.functions = self._load_functions()
-        print("🔧 ToolsManager inicializado - ferramentas otimizadas")
+        print(" ToolsManager inicializado - ferramentas otimizadas")
     
     def _load_tools_definitions(self):
         """Definições das ferramentas - SEM INSTRUÇÕES CONFLITANTES"""
@@ -152,7 +152,7 @@ class ToolsManager:
                 try:
                     from models.cache_manager import context_cache
                     context_cache.invalidate_context(session_id)
-                    print(f"🔄 Cache invalidado para session {session_id[:8]}...")
+                    print(f" Cache invalidado para session {session_id[:8]}...")
                 except ImportError:
                     pass
             
@@ -195,7 +195,7 @@ class ToolsManager:
                 try:
                     from models.cache_manager import context_cache
                     context_cache.invalidate_context(session_id)
-                    print(f"🔄 Cache invalidado para session {session_id[:8]}...")
+                    print(f" Cache invalidado para session {session_id[:8]}...")
                 except ImportError:
                     pass
             
@@ -222,7 +222,7 @@ class ToolsManager:
             return {"status": "erro", "mensagem": "query é obrigatória"}
         
         try:
-            print(f"🌐 Iniciando busca na internet: '{query}'")
+            print(f" Iniciando busca na internet: '{query}'")
             
             # Chamar a função de busca otimizada
             resultado = search_web_comprehensive(query)
@@ -230,22 +230,22 @@ class ToolsManager:
             if resultado['status'] == 'sucesso':
                 total = resultado.get('total_resultados', 0)
                 fontes = len(resultado.get('fontes_usadas', []))
-                print(f"✅ Busca concluída: {total} resultados de {fontes} fontes")
+                print(f" Busca concluída: {total} resultados de {fontes} fontes")
                 
                 # Formatar os resultados para a IA
                 from tools.web_search import format_search_results
                 resultado['resultados_formatados'] = format_search_results(resultado)
                 
-                # ✅ NOVO: Adicionar aviso explícito para priorizar busca
-                resultado['aviso_prioridade'] = "🔍 ATENÇÃO: Estas são informações ATUAIS da internet. Priorize sempre estes dados sobre conhecimento pré-treinado."
+                #  NOVO: Adicionar aviso explícito para priorizar busca
+                resultado['aviso_prioridade'] = " ATENÇÃO: Estas são informações ATUAIS da internet. Priorize sempre estes dados sobre conhecimento pré-treinado."
                 
                 return resultado
             else:
-                print(f"❌ Busca falhou: {resultado.get('mensagem', 'Erro desconhecido')}")
+                print(f" Busca falhou: {resultado.get('mensagem', 'Erro desconhecido')}")
                 return resultado
                 
         except Exception as e:
-            print(f"💥 Erro na busca web: {str(e)}")
+            print(f"Erro na busca web: {str(e)}")
             return {
                 "status": "erro", 
                 "mensagem": f"Erro na busca: {str(e)}",
@@ -256,7 +256,7 @@ class ToolsManager:
         """Retorna definições das ferramentas com cache"""
         if self._tools_cache is None:
             self._tools_cache = self._load_tools_definitions()
-            print(f"🔧 Tools cached: {len(self._tools_cache)} ferramentas essenciais")
+            print(f" Tools cached: {len(self._tools_cache)} ferramentas essenciais")
         return self._tools_cache
     
     def execute_tool(self, nome_ferramenta, argumentos):
@@ -268,28 +268,28 @@ class ToolsManager:
             # Log específico para cada ferramenta
             if nome_ferramenta == "search_web_comprehensive":
                 query = argumentos.get('query', '')
-                print(f"🌐 Executando busca: '{query}'")
+                print(f" Executando busca: '{query}'")
             elif nome_ferramenta == "salvar_dados":
                 chave = argumentos.get('chave', '')
-                print(f"💾 Salvando dado: '{chave}'")
+                print(f" Salvando dado: '{chave}'")
             elif nome_ferramenta == "buscar_dados":
                 chave = argumentos.get('chave', 'todos')
-                print(f"🔍 Buscando dado: '{chave}'")
+                print(f" Buscando dado: '{chave}'")
             else:
-                print(f"🔧 Executando: {nome_ferramenta}")
+                print(f" Executando: {nome_ferramenta}")
             
             resultado = self.functions[nome_ferramenta](**argumentos)
             
             # Log do resultado
             if resultado.get('status') == 'sucesso':
-                print(f"✅ {nome_ferramenta}: Sucesso")
+                print(f" {nome_ferramenta}: Sucesso")
             else:
-                print(f"❌ {nome_ferramenta}: {resultado.get('mensagem', 'Erro')}")
+                print(f" {nome_ferramenta}: {resultado.get('mensagem', 'Erro')}")
             
             return resultado
             
         except Exception as e:
-            print(f"💥 {nome_ferramenta}: Erro - {str(e)}")
+            print(f"{nome_ferramenta}: Erro - {str(e)}")
             return {"status": "erro", "mensagem": f"Erro na execução: {str(e)}"}
 
 # Instância global

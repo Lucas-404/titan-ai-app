@@ -132,10 +132,6 @@ def log_security_event(event_type, session_id, details=None):
         except Exception as e:
             print(f" Erro ao salvar log de segurança: {e}")
 
-# Criar diretórios
-for directory in [CHATS_DIR, BACKUPS_DIR, EXPORTS_DIR, SESSIONS_DIR, SECURITY_LOGS_DIR]:
-    directory.mkdir(exist_ok=True)
-
 print(f"Configuração carregada - Base: {BASE_DIR}")
 print(f"Chats salvos em: {CHATS_DIR}")
 print(f"Sessões isoladas em: {SESSIONS_DIR}")

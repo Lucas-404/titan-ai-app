@@ -16,13 +16,13 @@ function openFeedbackModal() {
         document.getElementById('feedbackTitleInput').focus();
     }, 300);
     
-    console.log('💬 Modal de feedback aberto');
+    console.log(' Modal de feedback aberto');
 }
 
 // ===== FECHAR MODAL =====
 function closeFeedbackModal() {
     document.getElementById('feedbackModal').style.display = 'none';
-    console.log('❌ Modal de feedback fechado');
+    console.log('Modal de feedback fechado');
 }
 
 // ===== SELECIONAR TIPO =====
@@ -55,7 +55,7 @@ function selectFeedbackType(tipo) {
     document.getElementById('feedbackTitle').textContent = titles[tipo];
     document.getElementById('feedbackIcon').textContent = icons[tipo];
     
-    console.log(`🎯 Tipo selecionado: ${tipo}`);
+    console.log(`Tipo selecionado: ${tipo}`);
 }
 
 // ===== CONTADOR DE CARACTERES =====
@@ -107,7 +107,7 @@ async function submitFeedback() {
         
         console.log('📤 Enviando feedback real para servidor:', feedbackData);
         
-        // ✅ CÓDIGO REAL - NÃO MAIS SIMULAÇÃO
+        //  CÓDIGO REAL - NÃO MAIS SIMULAÇÃO
         const response = await fetch('/api/feedback', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -142,7 +142,7 @@ async function submitFeedback() {
         }, 3000);
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        console.error('Erro:', error);
         alert('Erro: ' + error.message);
     }
     
@@ -172,5 +172,5 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    console.log('💬 Sistema de feedback integrado carregado!');
+    console.log(' Sistema de feedback integrado carregado!');
 });

@@ -11,7 +11,6 @@ from utils.ai_client import ai_client
 from models.request_manager import request_manager
 from models.cache_manager import context_cache, cache_context
 import requests
-# ===== SEGURANÇA: IMPORTS ADICIONAIS =====
 from flask_wtf.csrf import CSRFProtect, validate_csrf
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField
@@ -32,7 +31,7 @@ limiter = Limiter(
 
 # ===== CONFIGURAÇÃO DE ONDE SALVAR FEEDBACK (SEGURO) =====
 FEEDBACK_DIR = Path(__file__).parent.parent / 'data' / 'feedbacks'
-FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+# FEEDBACK_DIR.mkdir(parents=True, exist_ok=True) # Desabilitado para evitar criação automática
 
 def get_safe_feedback_path():
     """Retorna path seguro para feedback"""
@@ -128,7 +127,7 @@ def get_user_context(session_id):
             return "Primeira conversa - ainda não sei nada sobre você."
             
     except Exception as e:
-        print(f"❌ Erro ao buscar contexto: {e}")
+        print(f" Erro ao buscar contexto: {e}")
         return "Erro ao acessar dados salvos."
 
 def processar_thinking_mode(mensagem, frontend_thinking_mode, session_data=None):
@@ -138,35 +137,35 @@ def processar_thinking_mode(mensagem, frontend_thinking_mode, session_data=None)
     
     # 1. PRIORIDADE: Frontend definiu explicitamente  
     if frontend_thinking_mode is not None:
-        print(f"🎯 [THINKING] Frontend definiu: {frontend_thinking_mode}")
-        return frontend_thinking_mode, mensagem  # ✅ NÃO REMOVE COMANDOS
+        print(f"[THINKING] Frontend definiu: {frontend_thinking_mode}")
+        return frontend_thinking_mode, mensagem  #  NÃO REMOVE COMANDOS
     
     # 2. DETECTAR comandos inline para determinar modo
     thinking_mode_final = None
     
     if '/no_think' in mensagem:
         thinking_mode_final = False
-        print(f"🔴 [THINKING] Comando /no_think detectado")
+        print(f"[THINKING] Comando /no_think detectado")
     
     if '/think' in mensagem:
         thinking_mode_final = True  
         print(f"🟣 [THINKING] Comando /think detectado")
     
-    # ✅ RETORNAR MENSAGEM ORIGINAL COM COMANDOS
+    #  RETORNAR MENSAGEM ORIGINAL COM COMANDOS
     if thinking_mode_final is not None:
         return thinking_mode_final, mensagem
     
     # 3. Padrão do sistema
     default_mode = session_data.get('default_thinking', False) if session_data else False
-    print(f"⚙️ [THINKING] Usando padrão: {default_mode}")
+    print(f"[THINKING] Usando padrão: {default_mode}")
     
     return default_mode, mensagem
 
 @main_bp.route('/chat-stream', methods=['POST'])
 def chat_stream():
-    """🌊 CHAT STREAMING ULTRA-OTIMIZADO"""
+    """ CHAT STREAMING ULTRA-OTIMIZADO"""
     try:
-        # ✅ VALIDAÇÃO MÍNIMA
+        #  VALIDAÇÃO MÍNIMA
         data = request.get_json()
         mensagem = data.get('mensagem', '').strip()
         thinking_mode = data.get('thinking_mode', False)
@@ -174,7 +173,7 @@ def chat_stream():
         if not mensagem:
             return jsonify({'error': 'Mensagem obrigatória'}), 400
 
-        # ✅ VERIFICAR OLLAMA RÁPIDO
+        #  VERIFICAR OLLAMA RÁPIDO
         try:
             test_response = requests.get("http://localhost:11434/api/tags")
             if test_response.status_code != 200:
@@ -182,22 +181,22 @@ def chat_stream():
         except:
             return jsonify({'error': 'Ollama offline'}), 503
 
-        # ✅ SESSÃO SIMPLIFICADA
+        #  SESSÃO SIMPLIFICADA
         session_id = session.get('titan_session_id')
         if not session_id:
             session_id = str(uuid.uuid4())
             session['titan_session_id'] = session_id
 
-        # ✅ REQUEST MANAGER SIMPLES
+        #  REQUEST MANAGER SIMPLES
         request_id = str(uuid.uuid4())
         
-        # ✅ MENSAGENS DIRETAS - SEM CONTEXTO PESADO
+        #  MENSAGENS DIRETAS - SEM CONTEXTO PESADO
         messages = [
             {"role": "system", "content": "Você é o Titan, um assistente inteligente."},
             {"role": "user", "content": mensagem}
         ]
 
-        # ✅ STREAM GENERATOR OTIMIZADO
+        #  STREAM GENERATOR OTIMIZADO
         def generate():
             try:
                 for chunk in ai_client.send_message_streaming(
@@ -206,7 +205,7 @@ def chat_stream():
                     session_id=session_id,
                     request_id=request_id
                 ):
-                    # ✅ YIELD DIRETO - SEM PROCESSAMENTO
+                    #  YIELD DIRETO - SEM PROCESSAMENTO
                     yield f"data: {json.dumps(chunk, ensure_ascii=False, separators=(',', ':'))}\n\n"
                     
             except Exception as e:
@@ -219,7 +218,7 @@ def chat_stream():
             headers={
                 'Cache-Control': 'no-cache',
                 'Connection': 'keep-alive',
-                'X-Accel-Buffering': 'no'  # ✅ NGINX OPTIMIZATION
+                'X-Accel-Buffering': 'no'  #  NGINX OPTIMIZATION
             }
         )
 
@@ -380,7 +379,7 @@ def end_session():
     """Finalizar sessão"""
     return jsonify({'status': 'sucesso'})
 
-@main_bp.route('/api/chats', methods=['GET', 'POST'])  # ✅ ROTA QUE FALTAVA
+@main_bp.route('/api/chats', methods=['GET', 'POST'])  #  ROTA QUE FALTAVA
 def api_chats():
     """API para chats (diferente de /api/chat)"""
     if request.method == 'GET':

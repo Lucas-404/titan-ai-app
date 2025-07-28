@@ -11,7 +11,7 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
 
-        # 🔧 CORREÇÃO: Adicionar coluna session_id
+        #  CORREÇÃO: Adicionar coluna session_id
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS dados_salvos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,18 +25,18 @@ class DatabaseManager:
             )
         """)
 
-        # 🔧 MIGRAÇÃO: Verificar se precisa migrar dados antigos
+        #  MIGRAÇÃO: Verificar se precisa migrar dados antigos
         cursor.execute("PRAGMA table_info(dados_salvos)")
         colunas = [coluna[1] for coluna in cursor.fetchall()]
 
         if 'session_id' not in colunas:
-            print("🔄 Migrando banco de dados para suporte a sessões...")
+            print("Migrando banco de dados para suporte a sessões...")
             cursor.execute("ALTER TABLE dados_salvos ADD COLUMN session_id TEXT DEFAULT 'legacy'")
-            print("✅ Migração concluída!")
+            print("Migração concluída!")
 
         conn.commit()
         conn.close()
-        print(f"💾 Banco de dados inicializado: {self.db_file}")
+        print(f"Banco de dados inicializado: {self.db_file}")
 
     def get_connection(self):
         return sqlite3.connect(self.db_file)
@@ -49,7 +49,7 @@ class DatabaseManager:
             conn = self.get_connection()
             cursor = conn.cursor()
 
-            # 🔧 CORREÇÃO: Buscar por session_id E chave
+            #  CORREÇÃO: Buscar por session_id E chave
             cursor.execute(
                 'SELECT valor FROM dados_salvos WHERE session_id = ? AND chave = ?',
                 (session_id, chave)
@@ -58,7 +58,7 @@ class DatabaseManager:
 
             if resultado_existente:
                 valor_antigo = resultado_existente[0]
-                # 🔧 CORREÇÃO: Atualizar com session_id
+                #  CORREÇÃO: Atualizar com session_id
                 cursor.execute("""
                     UPDATE dados_salvos 
                     SET valor = ?, categoria = ?, data_atualizacao = CURRENT_TIMESTAMP 
@@ -66,7 +66,7 @@ class DatabaseManager:
                 """, (valor, categoria, session_id, chave))
                 operacao = "atualizado"
             else:
-                # 🔧 CORREÇÃO: Inserir com session_id
+                #  CORREÇÃO: Inserir com session_id
                 cursor.execute("""
                     INSERT INTO dados_salvos (session_id, chave, valor, categoria)
                     VALUES (?, ?, ?, ?)
@@ -76,7 +76,7 @@ class DatabaseManager:
             conn.commit()
             conn.close()
 
-            print(f"💾 Dado {operacao} para sessão {session_id[:8]}...: {chave} = {valor}")
+            print(f" Dado {operacao} para sessão {session_id[:8]}...: {chave} = {valor}")
 
             return {
                 "status": "sucesso",
@@ -98,7 +98,7 @@ class DatabaseManager:
             cursor = conn.cursor()
 
             if chave:
-                # 🔧 CORREÇÃO: Buscar por session_id E chave
+                #  CORREÇÃO: Buscar por session_id E chave
                 cursor.execute("""
                     SELECT chave, valor, categoria, data_criacao, data_atualizacao
                     FROM dados_salvos WHERE session_id = ? AND chave = ?
@@ -122,7 +122,7 @@ class DatabaseManager:
                         "mensagem": f"Nenhum dado encontrado para '{chave}' na sessão atual"
                     }
             else:
-                # 🔧 CORREÇÃO: Listar apenas dados da sessão
+                #  CORREÇÃO: Listar apenas dados da sessão
                 query = """
                     SELECT chave, valor, categoria, data_criacao
                     FROM dados_salvos
@@ -159,7 +159,7 @@ class DatabaseManager:
         except Exception as e:
             return {"status": "erro", "mensagem": str(e)}
 
-    # 🆕 NOVA FUNÇÃO: Deletar dados com isolamento
+    #  NOVA FUNÇÃO: Deletar dados com isolamento
     def deletar_dados(self, chave, session_id=None):
         if not session_id:
             return {"status": "erro", "mensagem": "session_id é obrigatório"}
@@ -191,7 +191,7 @@ class DatabaseManager:
             conn.commit()
             conn.close()
 
-            print(f"🗑️ Dado deletado da sessão {session_id[:8]}...: {chave}")
+            print(f"Dado deletado da sessão {session_id[:8]}...: {chave}")
 
             return {
                 "status": "sucesso",
@@ -203,7 +203,7 @@ class DatabaseManager:
         except Exception as e:
             return {"status": "erro", "mensagem": str(e)}
 
-    # 🆕 NOVA FUNÇÃO: Listar categorias com isolamento
+    #  NOVA FUNÇÃO: Listar categorias com isolamento
     def listar_categorias(self, session_id=None):
         if not session_id:
             return {"status": "erro", "mensagem": "session_id é obrigatório"}
@@ -243,7 +243,7 @@ class DatabaseManager:
             return {"status": "erro", "mensagem": str(e)}
 
     def cleanup_expired_sessions(self, active_session_ids):
-        """🧹 NOVO: Limpar dados de sessões expiradas"""
+        """NOVO: Limpar dados de sessões expiradas"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -262,7 +262,7 @@ class DatabaseManager:
                 deleted_count = cursor.rowcount
                 
                 conn.commit()
-                print(f"🧹 Limpeza automática: {deleted_count} dados órfãos removidos de {len(orphaned_sessions)} sessões")
+                print(f"Limpeza automática: {deleted_count} dados órfãos removidos de {len(orphaned_sessions)} sessões")
                 
                 conn.close()
                 return {"status": "sucesso", "deleted_count": deleted_count, "orphaned_sessions": len(orphaned_sessions)}
@@ -271,7 +271,7 @@ class DatabaseManager:
             return {"status": "sucesso", "deleted_count": 0, "orphaned_sessions": 0}
             
         except Exception as e:
-            print(f"❌ Erro na limpeza automática: {e}")
+            print(f"Erro na limpeza automática: {e}")
             return {"status": "erro", "mensagem": str(e)}
 
 # Instância global

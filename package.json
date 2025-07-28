@@ -1,0 +1,24 @@
+{
+  "name": "titan-bkp-13_06_25",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lucas-404/titan-ai-app.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Lucas-404/titan-ai-app/issues"
+  },
+  "homepage": "https://github.com/Lucas-404/titan-ai-app#readme",
+  "dependencies": {
+    "lodash": "^4.17.21"
+  }
+}

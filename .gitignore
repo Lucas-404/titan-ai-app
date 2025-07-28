@@ -108,3 +108,8 @@ ENV/
 titan_memory.db
 security_logs/
 *.log
+
+# Adicionado pelo Gemini
+venv/
+node_modules/
+package-lock.json
