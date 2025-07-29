@@ -594,6 +594,11 @@ async function sendChatMessage() {
 async function streamWithFetchStream(message, container) {
     return new Promise((resolve, reject) => {
         console.log(' Iniciando stream para:', message);
+        let thinkingContainerRef = null; // Inicializar aqui
+
+        if (currentThinkingMode) {
+            thinkingContainerRef = createThinkingContainer(container);
+        }
         
         //  TIMEOUT MAIOR PARA OLLAMA
         const timeoutMs = 60000; // 60 segundos para Ollama responder
@@ -723,24 +728,27 @@ async function streamWithFetchStream(message, container) {
                                 }
 
                                 //  THINKING PROCESSING
-                                if (data.type === 'thinking_done') {
+                                if (data.type === 'thinking_chunk') {
+                                    const newThinkingChunk = data.content || '';
+                                    if (currentThinkingMode && thinkingContainerRef) {
+                                        thinkingContent += newThinkingChunk; // Acumula o pensamento
+                                        updateThinkingContent(thinkingContainerRef, thinkingContent);
+                                    }
+                                } else if (data.type === 'thinking_done') {
                                     thinkingContent = data.thinking || '';
-                                    console.log('🧠 Thinking recebido:', thinkingContent.length, 'chars');
+                                    console.log('🧠 Thinking recebido (final):', thinkingContent.length, 'chars');
                                     
-                                    if (currentThinkingMode && thinkingContent && !thinkingContainer) {
-                                        thinkingContainer = createThinkingContainer(container);
-                                        if (thinkingContainer) {
-                                            updateThinkingContent(thinkingContainer, thinkingContent);
-                                        }
+                                    if (currentThinkingMode && thinkingContainerRef) {
+                                        updateThinkingContent(thinkingContainerRef, thinkingContent);
                                     }
                                 }
 
                                 //  CONTENT UPDATE COM DEBUG
                                 else if (data.type === 'content') {
                                     const newContent = data.buffer || data.content || '';
-                                    if (newContent !== fullContent) {
+                                    if (newContent) {
                                         const oldLength = fullContent.length;
-                                        fullContent = newContent;
+                                        fullContent += newContent;
                                         console.log('📝 Conteúdo atualizado:', oldLength, '->', fullContent.length, 'chars');
                                         
                                         if (contentElement) {
@@ -920,27 +928,29 @@ function finalizeStreamingMessage(container, content, thinking = null) {
 
     //  ADICIONAR THINKING SE PRESENTE
     if (thinking && thinking.trim() && currentThinkingMode) {
-        assistantDiv.innerHTML = `
-            <div class="thinking-container">
-                <div class="thinking-header" onclick="toggleThinking(this)">
-                    <span class="thinking-icon">🧠</span>
-                    <span class="thinking-summary">Processo de raciocínio</span>
-                    <span class="thinking-toggle">▼</span>
-                </div>
-                <div class="thinking-content">
-                    <div class="thinking-scroll">${escapeHtml(thinking)}</div>
-                </div>
-            </div>
-            <div class="message-content">${formatMessage(content)}</div>
-        `;
-        console.log('🧠 Thinking adicionado à mensagem!');
-    } else {
-        // Mensagem normal sem thinking
-        const contentDiv = container.querySelector('.streaming-content');
-        if (contentDiv) {
-            contentDiv.innerHTML = formatMessage(content);
-            contentDiv.classList.remove('streaming-content');
+        const thinkingContainer = assistantDiv.querySelector('.thinking-container');
+        if (thinkingContainer) {
+            const thinkingScroll = thinkingContainer.querySelector('.thinking-scroll');
+            if (thinkingScroll) {
+                thinkingScroll.innerHTML = escapeHtml(thinking);
+            }
+            const thinkingSummary = thinkingContainer.querySelector('.thinking-summary');
+            if (thinkingSummary) {
+                thinkingSummary.textContent = 'Processo de raciocínio';
+            }
+            thinkingContainer.classList.remove('live-thinking');
+            thinkingContainer.classList.remove('expanded');
+            thinkingContainer.querySelector('.thinking-content').style.maxHeight = '0';
+            thinkingContainer.querySelector('.thinking-toggle').textContent = '▼';
         }
+        console.log('🧠 Thinking finalizado e adicionado à mensagem!');
+    }
+
+    // Mensagem principal
+    const contentDiv = container.querySelector('.streaming-content');
+    if (contentDiv) {
+        contentDiv.innerHTML = formatMessage(content);
+        contentDiv.classList.remove('streaming-content');
     }
 
     scrollToBottom();
@@ -1374,41 +1384,6 @@ function focusCurrentInput() {
     }
 }
 
-function refreshMessages() {
-    const messagesContainer = document.getElementById('chatMessages');
-    if (!messagesContainer) {
-        console.log('🔄 Container de mensagens não encontrado');
-        return;
-    }
-
-    // Re-aplicar estilos baseados no thinking mode atual
-    const assistantMessages = messagesContainer.querySelectorAll('.assistant-message');
-
-    if (assistantMessages.length === 0) {
-        console.log('🔄 Nenhuma mensagem do assistente para atualizar');
-        return;
-    }
-
-    // Atualizar cada mensagem do assistente
-    assistantMessages.forEach((msg, index) => {
-        const mode = currentThinkingMode ? 'Raciocínio' : 'Direto';
-        const safeMode = sanitizeAttribute(mode);
-        msg.setAttribute('data-mode', safeMode);
-
-        // Se a mensagem tem thinking container, atualizar visibilidade
-        const thinkingContainer = msg.querySelector('.thinking-container');
-        if (thinkingContainer) {
-            if (!currentThinkingMode) {
-                thinkingContainer.style.opacity = '0.7';
-            } else {
-                thinkingContainer.style.opacity = '1';
-            }
-        }
-    });
-
-    console.log(`🔄 ${assistantMessages.length} mensagens atualizadas para modo: ${currentThinkingMode ? 'Raciocínio' : 'Direto'}`);
-}
-
 // =================== GESTÃO DE SESSÃO ===================
 function generateSessionId() {
     return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -1441,21 +1416,6 @@ function clearCurrentSession() {
     feedbackShown = false;
 
     console.log('🧹 Sessão limpa');
-}
-
-// =================== FEEDBACK SYSTEM ===================
-function initializeFeedbackSystem() {
-    // Sistema de feedback será implementado
-    console.log('💬 Sistema de feedback inicializado');
-}
-
-function checkForFeedback() {
-    // Verificar se deve mostrar feedback
-    if (userMessageCount >= 5 && !feedbackShown) {
-        // Mostrar feedback após 5 mensagens
-        feedbackShown = true;
-        console.log('💬 Momento para feedback chegou');
-    }
 }
 
 // =================== EVENTOS DE PÁGINA ===================
@@ -1531,48 +1491,6 @@ function debugSessionInfo() {
     });
 }
 
-// =================== 🔒 TOAST SEGURO ===================
-function showToast(message, type = 'info') {
-    const safeMessage = escapeHtml(message);
-    const safeType = sanitizeAttribute(type);
-
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${safeType}`;
-    toast.textContent = safeMessage;
-
-    // Posicionar toast
-    toast.style.position = 'fixed';
-    toast.style.top = '170px';
-    toast.style.right = '20px';
-    toast.style.zIndex = '150';
-    toast.style.padding = '12px 20px';
-    toast.style.borderRadius = '12px';
-    toast.style.color = '#ffffff';
-    toast.style.fontSize = '14px';
-    toast.style.fontWeight = '500';
-    toast.style.maxWidth = '350px';
-
-    // Cores por tipo
-    if (type === 'success') {
-        toast.style.backgroundColor = 'rgba(16, 185, 129, 0.9)';
-    } else if (type === 'warning') {
-        toast.style.backgroundColor = 'rgba(245, 158, 11, 0.9)';
-    } else if (type === 'error') {
-        toast.style.backgroundColor = 'rgba(239, 68, 68, 0.9)';
-    } else {
-        toast.style.backgroundColor = 'rgba(107, 114, 128, 0.9)';
-    }
-
-    document.body.appendChild(toast);
-
-    // Auto-remove após 1,5 segundos
-    setTimeout(() => {
-        if (toast.parentNode) {
-            toast.parentNode.removeChild(toast);
-        }
-    }, 1500);
-}
-
 // =================== DEBUG FUNCTION ===================
 // =================== DEBUG MELHORADO ===================
 function debugConnection() {
@@ -1638,6 +1556,5 @@ window.startNewChat = startNewChat;
 window.backToWelcome = backToWelcome;
 window.toggleThinking = toggleThinking;
 window.cancelCurrentRequest = cancelCurrentRequest;
-window.showToast = showToast;
 
-console.log(' Titan Chat - Sistema com STREAMING REAL carregado! 🚀');
+console.log(' Titan Chat - Sistema com STREAMING REAL carregado!');

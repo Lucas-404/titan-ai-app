@@ -529,7 +529,6 @@ async function exportChat(chatId) {
         }
     } catch (error) {
         console.error('Erro ao exportar:', error);
-        showToast('Erro de conexão', 'error');
     }
 }
 
@@ -553,7 +552,6 @@ async function exportAllChats() {
         }
     } catch (error) {
         console.error('Erro ao exportar:', error);
-        showToast('Erro de conexão', 'error');
     }
 }
 
@@ -601,7 +599,6 @@ async function createManualBackup() {
         }
     } catch (error) {
         console.error('Erro ao criar backup:', error);
-        showToast('Erro de conexão', 'error');
     }
 }
 
@@ -617,7 +614,7 @@ async function showChatStats() {
 - ${stats.total_messages} mensagens totais
 - Arquivo: ${(stats.file_size / 1024).toFixed(2)} KB`;
 
-        showToast(message, 'info');
+        console.info(message);
     } catch (error) {
         console.error('Erro ao carregar stats:', error);
     }
