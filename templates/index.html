@@ -42,52 +42,6 @@
 </script>
 
 <body>
-    <!-- ✅ SIDEBAR MENU SIMPLIFICADO -->
-    <div class="claude-sidebar" id="claudeSidebar">
-        <div class="sidebar-header">
-            <button class="sidebar-toggle" onclick="toggleClaudeSidebar()">
-                <span class="hamburger">☰</span>
-            </button>
-            <div class="sidebar-logo">
-                <span class="logo-text">Titan</span>
-            </div>
-        </div>
-
-        <!-- Botão Nova Conversa -->
-        <div class="sidebar-new-chat">
-            <button class="new-chat-btn" onclick="startNewChat()">
-                <span class="btn-icon">➕</span>
-                <span class="btn-text">Novo bate-papo</span>
-            </button>
-        </div>
-
-        <!-- Lista de Conversas Recentes -->
-        <div class="sidebar-recents">
-            <div class="recents-header">Recentes</div>
-            <div class="recents-list" id="recentsList">
-                <!-- Conversas serão carregadas aqui via JavaScript -->
-            </div>
-        </div>
-
-        <!-- Footer com informações do Titan -->
-        <div class="sidebar-footer">
-            <div class="user-info" onclick="showTitanInfo()">
-                <div class="user-avatar">ℹ️</div>
-                <div class="user-details">
-                    <div class="user-name">Titan AI</div>
-                    <div class="user-plan">Informações do sistema</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Overlay para fechar clicando fora -->
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeClaudeSidebar()"></div>
-
-    <!-- Botão hamburger fixo (quando sidebar fechada) -->
-    <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleClaudeSidebar()">
-        ☰
-    </button>
 
     <!-- Partículas animadas -->
     <div class="particles" id="particles"></div>
@@ -397,6 +351,21 @@
             </div>
         </div>
     </div>
+
+    <!-- Template para barra de pensamento -->
+    <template id="thinking-bar-template">
+        <div class="thinking-bar" onclick="toggleThinkingBar(this)">
+            <div class="thinking-bar-header">
+                <span class="thinking-bar-text">🧠 Pensando...</span>
+                <svg class="thinking-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6,9 12,15 18,9"></polyline>
+                </svg>
+            </div>
+            <div class="thinking-bar-content">
+                <div class="thinking-bar-scroll"></div>
+            </div>
+        </div>
+    </template>
 
     <template id="message-actions-template">
         <div class="message-actions">

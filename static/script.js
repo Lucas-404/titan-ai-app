@@ -288,12 +288,7 @@ async function sendMessageToServer(message) {
         });
         if (response.status === 429) {
             const errorData = await response.json();
-            if (errorData.action_required === 'create_account') { showCreateAccountModal(errorData); streamContainer.remove(); return; }
-            else { showError(errorData.error); streamContainer.remove(); return; }
-        }
-        if (response.status === 402) {
-            const errorData = await response.json();
-            showFeatureRestrictedModal(errorData);
+            showError(errorData.error || 'Muitas requisições. Tente novamente em alguns minutos.');
             streamContainer.remove();
             return;
         }
@@ -308,36 +303,10 @@ async function sendMessageToServer(message) {
     }
 }
 
-function showCreateAccountModal(limitData) {
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.innerHTML = `<div class="modal-content"><h3>Limite de Mensagens Atingido!</h3><p>Você usou <strong>${limitData.messages_used}/${limitData.limit}</strong> mensagens gratuitas hoje.</p><p>Crie uma conta <strong>gratuita</strong> para continuar conversando com o Titan!</p><div class="modal-benefits"><h4>✨ Benefícios da conta gratuita:</h4><ul><li>Mais mensagens por dia</li><li>Histórico de conversas</li><li>Memória personalizada</li></ul></div><div class="modal-actions"><button onclick="openRegisterForm()" class="btn btn-primary">Criar Conta Grátis</button><button onclick="closeCreateAccountModal()" class="btn btn-secondary">Talvez Depois</button></div></div>`;
-    document.body.appendChild(modal);
-    modal.style.display = 'flex';
-}
 
-function closeCreateAccountModal() {
-    const modal = document.querySelector('.modal');
-    if (modal) modal.remove();
-}
 
-function openRegisterForm() {
-    closeCreateAccountModal();
-    console.log('Abrir formulário de registro');
-}
 
-function showFeatureRestrictedModal(errorData) {
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.innerHTML = `<div class="modal-content"><h3>Feature Premium</h3><p>${errorData.error}</p>${errorData.action_required === 'create_account' ? '<button onclick="openRegisterForm()" class="btn btn-primary">Criar Conta Grátis</button>' : '<button onclick="showUpgradeModal()" class="btn btn-primary">Ver Planos Premium</button>'}<button onclick="closeFeatureModal()" class="btn btn-secondary">Fechar</button></div>`;
-    document.body.appendChild(modal);
-    modal.style.display = 'flex';
-}
 
-function closeFeatureModal() {
-    const modal = document.querySelector('.modal');
-    if (modal) modal.remove();
-}
 
 async function sendChatMessage() {
     if (isGenerating && currentRequest) { cancelCurrentRequest(); return; }
@@ -383,7 +352,7 @@ async function processStreamResponse(response, container) {
                         }
                     }
                     if (data.type === 'thinking_done' && data.thinking) { thinkingContent = data.thinking; console.log(' [STREAM] Thinking recebido:', thinkingContent.length, 'chars'); }
-                    if (data.type === 'error') { if (data.action_required === 'create_account') showCreateAccountModal(data); else showError(data.error); streamContainer.remove(); return; }
+                    if (data.type === 'error') { showError(data.error); streamContainer.remove(); return; }
                     if (data.type === 'done') { console.log('🏁 [STREAM] Done recebido'); finalizeStreamingMessage(container, fullContent, thinkingContent); return; }
                 } catch (e) { console.warn(' [STREAM] Erro no parse:', e); }
             }
@@ -402,23 +371,35 @@ function processThinkingInRealTime(fullContent, container) {
     const thinkStartIndex = fullContent.indexOf('<think>');
     const thinkEndIndex = fullContent.indexOf('</think>');
     if (thinkStartIndex !== -1) {
-        if (currentThinkingMode && !container.querySelector('.thinking-container')) { thinkingContainer = createThinkingContainerLive(container); thinkingScrollElement = thinkingContainer?.querySelector('.thinking-scroll'); console.log(' Container de thinking criado em tempo real'); }
+        if (currentThinkingMode && !container.querySelector('.thinking-bar')) { thinkingContainer = createThinkingContainerLive(container); thinkingScrollElement = thinkingContainer?.querySelector('.thinking-bar-scroll'); console.log(' Container de thinking criado em tempo real'); }
         if (thinkEndIndex !== -1) { thinkingContent = fullContent.substring(thinkStartIndex + 7, thinkEndIndex); afterThinkingContent = fullContent.substring(thinkEndIndex + 8).trim(); insideThinking = false; console.log('Thinking completo extraído:', thinkingContent.length, 'chars'); }
         else { thinkingContent = fullContent.substring(thinkStartIndex + 7); afterThinkingContent = ''; insideThinking = true; }
-        if (!thinkingContainer) thinkingContainer = container.querySelector('.thinking-container');
-        if (!thinkingScrollElement) thinkingScrollElement = thinkingContainer?.querySelector('.thinking-scroll');
+        if (!thinkingContainer) thinkingContainer = container.querySelector('.thinking-bar');
+        if (!thinkingScrollElement) thinkingScrollElement = thinkingContainer?.querySelector('.thinking-bar-scroll');
     } else { afterThinkingContent = fullContent; insideThinking = false; }
     return { insideThinking, thinkingContent, afterThinkingContent, thinkingContainer, thinkingScrollElement };
 }
 
-// CRIAR CONTAINER DE THINKING LIVE - TAMANHO FIXO
+// CRIAR CONTAINER DE THINKING USANDO TEMPLATE
 function createThinkingContainerLive(messageContainer) {
     const assistantDiv = messageContainer.querySelector('.assistant-message');
     if (!assistantDiv) return null;
-    const thinkingHTML = `<div class="thinking-container live-thinking"><div class="thinking-header" onclick="toggleThinking(this)"><span class="thinking-icon"></span><span class="thinking-summary">Pensando em tempo real...</span><span class="thinking-toggle">▼</span></div><div class="thinking-content" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease;"><div class="thinking-scroll" style="height: 200px; overflow-y: auto; padding: 10px; font-size: 13px; line-height: 1.4; color: #e5e7eb; background: rgba(0,0,0,0.2); border-radius: 8px;"></div></div></div>`;
-    assistantDiv.insertAdjacentHTML('afterbegin', thinkingHTML);
-    const thinkingContainer = assistantDiv.querySelector('.thinking-container');
-    console.log(' Container de thinking live criado (fechado, tamanho fixo)');
+    
+    const template = document.getElementById('thinking-bar-template');
+    if (!template) {
+        console.error('Template de thinking bar não encontrado!');
+        return null;
+    }
+    
+    const thinkingClone = template.content.cloneNode(true);
+    const thinkingContainer = thinkingClone.querySelector('.thinking-bar');
+    const summarySpan = thinkingClone.querySelector('.thinking-bar-text');
+    
+    // Manter texto padrão "Pensando..."
+    summarySpan.textContent = '🧠 Pensando...';
+    
+    assistantDiv.insertAdjacentElement('afterbegin', thinkingContainer);
+    console.log(' Container de thinking live criado usando template');
     return thinkingContainer;
 }
 
@@ -428,11 +409,16 @@ function scrollToBottom() {
     if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-// NOVA FUNÇÃO: Atualizar thinking em tempo real
+// NOVA FUNÇÃO: Atualizar thinking em tempo real com crescimento dinâmico
 function updateThinkingContent(thinkingContainer, content) {
     if (!thinkingContainer) return;
-    const scroll = thinkingContainer.querySelector('.thinking-scroll');
-    if (scroll) { scroll.textContent = content; scroll.scrollTop = scroll.scrollHeight; }
+    const scroll = thinkingContainer.querySelector('.thinking-bar-scroll');
+    if (scroll) { 
+        scroll.textContent = content; 
+        scroll.scrollTop = scroll.scrollHeight;
+        
+        // Conteúdo disponível - manter simples
+    }
 }
 
 // FUNÇÕES DE STREAMING REAL
@@ -462,7 +448,24 @@ function finalizeStreamingMessage(container, content, thinking = null) {
         // CORREÇÃO: Limpa o conteúdo da resposta antes de renderizar.
         const cleanContent = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
         
-        assistantDiv.innerHTML = `<div class="thinking-container"><div class="thinking-header" onclick="toggleThinking(this)"><span class="thinking-icon"></span><span class="thinking-summary">Processo de raciocínio</span><span class="thinking-toggle">▼</span></div><div class="thinking-content"><div class="thinking-scroll">${escapeHtml(thinking)}</div></div></div><div class="message-content">${formatMessage(cleanContent)}</div>`;
+        // Usar template para criar container de thinking
+        const template = document.getElementById('thinking-bar-template');
+        if (template) {
+            const thinkingClone = template.content.cloneNode(true);
+            const thinkingScroll = thinkingClone.querySelector('.thinking-bar-scroll');
+            thinkingScroll.textContent = thinking;
+            
+            assistantDiv.innerHTML = '';
+            assistantDiv.appendChild(thinkingClone);
+            
+            const messageContentDiv = document.createElement('div');
+            messageContentDiv.className = 'message-content';
+            messageContentDiv.innerHTML = formatMessage(cleanContent);
+            assistantDiv.appendChild(messageContentDiv);
+        } else {
+            // Fallback caso template não exista
+            assistantDiv.innerHTML = `<div class="message-content">${formatMessage(cleanContent)}</div>`;
+        }
         console.log(' Thinking adicionado à mensagem!');
     } else {
         const contentDiv = container.querySelector('.streaming-content');
@@ -547,7 +550,32 @@ function addMessageToChat(content, isUser, systemInfo = null) {
             const safeContent = formatMessage(content);
             const safeMode = sanitizeAttribute(mode);
             const safeTempoResposta = escapeHtml(tempoResposta);
-            messageContent = `<div class="assistant-message message-block" data-mode="${safeMode}"><div class="thinking-container"><div class="thinking-header" onclick="toggleThinking(this)"><span class="thinking-icon"></span><span class="thinking-summary">Pensou por ${safeTempoResposta}</span><span class="thinking-toggle">▼</span></div><div class="thinking-content"><div class="thinking-scroll">${safePensamento}</div></div></div><div class="message-content">${safeContent}</div></div>`;
+            // Usar template para criar assistant message com thinking
+            const template = document.getElementById('thinking-bar-template');
+            if (template) {
+                const thinkingClone = template.content.cloneNode(true);
+                const summarySpan = thinkingClone.querySelector('.thinking-bar-text');
+                const thinkingScroll = thinkingClone.querySelector('.thinking-bar-scroll');
+                
+                summarySpan.textContent = `Pensou por ${safeTempoResposta}`;
+                thinkingScroll.textContent = pensamento;
+                
+                const assistantDiv = document.createElement('div');
+                assistantDiv.className = 'assistant-message message-block';
+                assistantDiv.setAttribute('data-mode', safeMode);
+                
+                assistantDiv.appendChild(thinkingClone);
+                
+                const messageContentDiv = document.createElement('div');
+                messageContentDiv.className = 'message-content';
+                messageContentDiv.innerHTML = safeContent;
+                assistantDiv.appendChild(messageContentDiv);
+                
+                messageContent = assistantDiv.outerHTML;
+            } else {
+                // Fallback
+                messageContent = `<div class="assistant-message" data-mode="${safeMode}"><div class="message-content">${safeContent}</div></div>`;
+            }
         } else {
             const safeContent = formatMessage(content);
             const safeMode = sanitizeAttribute(mode);
@@ -563,13 +591,18 @@ function addMessageToChat(content, isUser, systemInfo = null) {
     scrollToBottom();
 }
 
-function toggleThinking(header) {
-    const container = header.parentElement;
-    const content = container.querySelector('.thinking-content');
-    const toggle = container.querySelector('.thinking-toggle');
-    if (!content || !toggle) { console.error('Elementos thinking-content ou thinking-toggle não encontrados!'); return; }
-    if (container.classList.contains('expanded')) { container.classList.remove('expanded'); content.style.maxHeight = '0'; toggle.textContent = '▼'; console.log(' Thinking fechado'); }
-    else { container.classList.add('expanded'); content.style.maxHeight = '220px'; toggle.textContent = '▲'; console.log(' Thinking aberto'); }
+function toggleThinkingBar(bar) {
+    const content = bar.querySelector('.thinking-bar-content');
+    const icon = bar.querySelector('.thinking-bar-icon');
+    if (!content) return;
+    
+    if (bar.classList.contains('expanded')) {
+        bar.classList.remove('expanded');
+        console.log('🧠 Thinking fechado');
+    } else {
+        bar.classList.add('expanded');
+        console.log('🧠 Thinking aberto');
+    }
     scrollToBottom();
 }
 
@@ -599,16 +632,8 @@ function updateSettingsButtonStates() {
     settingsBtns.forEach(btn => settingsTabVisible ? btn.classList.add('active') : btn.classList.remove('active'));
 }
 
-// =================== THINKING MODE E PLANO DO USUÁRIO ===================
-async function checkUserPlanAndUpdateUI() {
-    try {
-        const response = await fetchAPI('/api/user-status', { credentials: 'include' });
-        const data = await response.json();
-        if (data.logged_in) { updateThinkingModeAvailability(data.plan); updateUsageDisplay(data.usage, data.plan); updateUserInfo(data.user, data.plan); }
-        else if (data.anonymous) { console.log(' Usuário anônimo detectado - parando loop'); return; }
-        else if (!sessionId) await initializeUserSession();
-    } catch (error) { console.error('Erro ao verificar plano:', error); }
-}
+// =================== THINKING MODE ===================
+// Função simplificada - sem verificação de planos
 
 async function initializeUserSession() {
     console.log('🔄 Inicializando sessão...');
@@ -618,12 +643,6 @@ async function initializeUserSession() {
     } catch (error) { console.error('Erro ao inicializar sessão:', error); }
 }
 
-function updateThinkingModeForAnonymous() {
-    const toggle = document.getElementById('titanToggle');
-    if (toggle) toggle.classList.remove('disabled');
-    const thinkingBtns = document.querySelectorAll('.dropdown-toggle');
-    thinkingBtns.forEach(btn => { btn.classList.remove('disabled'); btn.style.opacity = '1'; });
-}
 
 function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
@@ -634,114 +653,17 @@ function setupKeyboardShortcuts() {
     console.log('⌨️ Atalhos de teclado configurados');
 }
 
-function updateThinkingModeAvailability(plan) {
-    const toggle = document.getElementById('titanToggle');
-    const thinkingBtns = document.querySelectorAll('.dropdown-toggle');
-    const hasThinkingMode = plan.features.includes('thinking_mode');
-    if (!hasThinkingMode) {
-        if (toggle) { toggle.classList.add('disabled'); toggle.title = `Thinking Mode disponível no plano ${plan.is_premium ? 'Premium' : 'Básico'}`; if (toggle.classList.contains('active')) { toggle.classList.remove('active'); currentThinkingMode = false; } }
-        thinkingBtns.forEach(btn => { btn.classList.add('disabled'); btn.style.opacity = '0.5'; });
-        showUpgradeBadge();
-    } else {
-        if (toggle) { toggle.classList.remove('disabled'); toggle.title = 'Thinking Mode disponível'; }
-        thinkingBtns.forEach(btn => { btn.classList.remove('disabled'); btn.style.opacity = '1'; });
-        hideUpgradeBadge();
-    }
-}
 
-function updateUsageDisplay(usage, plan) {
-    let usageDisplay = document.getElementById('usage-display');
-    if (!usageDisplay) usageDisplay = createUsageDisplay();
-    const hourUsed = usage.hour.messages;
-    const hourLimit = plan.messages_per_hour;
-    const dayUsed = usage.day.messages;
-    const dayLimit = plan.messages_per_day;
-    const hourPercent = (hourUsed / hourLimit) * 100;
-    const dayPercent = (dayUsed / dayLimit) * 100;
-    usageDisplay.innerHTML = `<div class="usage-info"><div class="plan-badge">${plan.name}</div><div class="usage-stats"><div class="usage-item ${hourPercent > 80 ? 'warning' : ''}"><span>Hora: ${hourUsed}/${hourLimit}</span><div class="usage-bar"><div class="usage-fill" style="width: ${hourPercent}%"></div></div></div><div class="usage-item ${dayPercent > 80 ? 'warning' : ''}"><span>Hoje: ${dayUsed}/${dayLimit}</span><div class="usage-bar"><div class="usage-fill" style="width: ${dayPercent}%"></div></div></div></div></div>`;
-    if (hourPercent > 90) showLimitWarning('Você usou mais de 90% do limite por hora!');
-    else if (dayPercent > 90) showLimitWarning('Você usou mais de 90% do limite diário!');
-}
 
-function createUsageDisplay() {
-    const display = document.createElement('div');
-    display.id = 'usage-display';
-    display.className = 'usage-display';
-    const chatContainer = document.getElementById('chatContainer');
-    if (chatContainer) chatContainer.insertBefore(display, chatContainer.firstChild);
-    return display;
-}
 
-function showUpgradeBadge() {
-    let badge = document.getElementById('upgrade-badge');
-    if (!badge) {
-        badge = document.createElement('div');
-        badge.id = 'upgrade-badge';
-        badge.className = 'upgrade-badge';
-        badge.innerHTML = `<span>Upgrade para Premium</span><button onclick="showUpgradeModal()">Ver Planos</button>`;
-        document.body.appendChild(badge);
-    }
-    badge.style.display = 'block';
-}
 
-function hideUpgradeBadge() {
-    const badge = document.getElementById('upgrade-badge');
-    if (badge) badge.style.display = 'none';
-}
 
-function showLimitWarning(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast toast-warning limit-warning';
-    toast.innerHTML = `${message}<button onclick="showUpgradeModal()" class="upgrade-btn-small">Fazer Upgrade</button>`;
-    document.body.appendChild(toast);
-    setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 5000);
-}
 
-function showUpgradeModal() {
-    const modal = document.createElement('div');
-    modal.className = 'upgrade-modal';
-    modal.innerHTML = `<div class="upgrade-modal-content"><div class="upgrade-modal-header"><h3>Desbloqueie o Thinking Mode</h3><button onclick="closeUpgradeModal()" class="close-btn">×</button></div><div class="upgrade-modal-body"><p>O <strong>Thinking Mode</strong> permite que o Titan pense em voz alta por mais tempo para dar respostas mais elaboradas.</p><div class="plans-comparison"><div class="plan-card current"><h4>Seu Plano Atual</h4><div class="plan-price">Gratuito</div><ul><li>10 mensagens/hora</li><li>50 mensagens/dia</li><li>❌ Thinking Mode</li></ul></div><div class="plan-card premium"><h4>Plano Básico</h4><div class="plan-price">R$ 19,90/mês</div><ul><li>100 mensagens/hora</li><li>500 mensagens/dia</li><li>Thinking Mode Ilimitado</li></ul><button onclick="selectPlan('basic')" class="btn-upgrade">Escolher Básico</button></div><div class="plan-card pro"><h4>Plano Pro</h4><div class="plan-price">R$ 49,99/mês</div><ul><li>1000 mensagens/hora</li><li>5000 mensagens/dia</li><li>Thinking Mode + Web Search</li></ul><button onclick="selectPlan('pro')" class="btn-upgrade">Escolher Pro</button></div></div></div></div>`;
-    document.body.appendChild(modal);
-}
 
-function closeUpgradeModal() {
-    const modal = document.querySelector('.upgrade-modal');
-    if (modal) modal.remove();
-}
 
-async function createStripeCheckout(priceId) {
-    try {
-        const response = await fetchAPI('/auth/create-checkout-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ price_id: priceId }), credentials: 'include' });
-        const data = await response.json();
-        if (data.checkout_url) window.location.href = data.checkout_url;
-        else alert('Erro ao criar sessão de checkout');
-    } catch (error) { alert('Erro: ' + error.message); }
-}
 
-window.selectPlan = async function (planType) {
-    console.log('🛒 Selecionando plano:', planType);
-    const modal = document.querySelector('.upgrade-modal');
-    if (modal) modal.remove();
-    const priceIds = { 'basic': 'price_1Rb8yJI0nP81FHlVezCBt5jT', 'pro': 'price_1Rb92YI0nP81FHlVGTp9sYKT' };
-    const priceId = priceIds[planType];
-    if (!priceId) { alert('Plano inválido: ' + planType); return; }
-    try {
-        const response = await fetchAPI('/auth/create-checkout-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ price_id: priceId }), credentials: 'include' });
-        const data = await response.json();
-        if (data.checkout_url) window.location.href = data.checkout_url;
-        else alert('Erro: ' + (data.error || 'Sem URL'));
-    } catch (error) { console.error('❌ Erro:', error); alert('Erro: ' + error.message); }
-};
 
 async function toggleThinkingClean() {
-    try {
-        const response = await fetchAPI('/api/user-status', { credentials: 'include' });
-        const data = await response.json();
-        if (data.logged_in) {
-            const hasThinkingMode = data.plan.features.includes('thinking_mode');
-            if (!hasThinkingMode && !currentThinkingMode) { showUpgradePrompt(); return; }
-        }
-    } catch (error) { console.error('Erro ao verificar permissões:', error); }
     const newMode = !currentThinkingMode;
     console.log(' Mudando thinking mode para:', newMode ? 'ATIVADO' : 'DESATIVADO');
     try {
@@ -752,12 +674,6 @@ async function toggleThinkingClean() {
     } catch (error) { console.error('Erro ao alterar thinking mode:', error); currentThinkingMode = newMode; applyTheme(currentThinkingMode); updateThinkingToggleVisual(); }
 }
 
-function showUpgradePrompt() {
-    const modal = document.createElement('div');
-    modal.className = 'upgrade-prompt-modal';
-    modal.innerHTML = `<div class="upgrade-prompt-content"><div class="upgrade-prompt-header"><h3>Thinking Mode Premium</h3><button onclick="this.closest('.upgrade-prompt-modal').remove()" class="close-btn">×</button></div><div class="upgrade-prompt-body"><p>O <strong>Thinking Mode</strong> permite que o Titan pense por mais tempo em problemas complexos, oferecendo respostas mais elaboradas e detalhadas.</p><div class="feature-comparison"><div class="plan-column current"><h4>Seu Plano Atual</h4><div class="plan-features"><div class="feature">10 mensagens/hora</div><div class="feature">50 mensagens/dia</div><div class="feature disabled">❌ Thinking Mode</div></div></div><div class="plan-column premium"><h4>Plano Premium</h4><div class="plan-features"><div class="feature">1000 mensagens/hora</div><div class="feature">5000 mensagens/dia</div><div class="feature">Thinking Mode Ilimitado</div></div></div></div></div><div class="upgrade-prompt-footer"><button onclick="this.closest('.upgrade-prompt-modal').remove()" class="btn-secondary">Talvez Depois</button><button onclick="showUpgradeModal()" class="btn-primary">Ver Planos 🚀</button></div></div>`;
-    document.body.appendChild(modal);
-}
 
 // =================== TOAST NOTIFICATIONS ===================
 function showToast(message, type = 'info') {
@@ -805,82 +721,20 @@ function debugConnection() {
 
 window.debugConnection = debugConnection;
 
-// =================== MENU LATERAL CLAUDE ===================
-let sidebarOpen = false;
-let currentChatId = null;
-let recentChats = [];
-
-function toggleClaudeSidebar() {
-    sidebarOpen = !sidebarOpen;
-    if (sidebarOpen) openClaudeSidebar();
-    else closeClaudeSidebar();
-}
-
-function openClaudeSidebar() {
-    const sidebar = document.getElementById('claudeSidebar');
-    const overlay = document.getElementById('sidebarOverlay');
-    const hamburgerBtn = document.getElementById('hamburgerBtn');
-    if (sidebar && overlay && hamburgerBtn) { sidebar.classList.add('open'); overlay.classList.add('active'); hamburgerBtn.classList.add('hidden'); sidebarOpen = true; loadRecentChats(); }
-}
-
-function closeClaudeSidebar() {
-    const sidebar = document.getElementById('claudeSidebar');
-    const overlay = document.getElementById('sidebarOverlay');
-    const hamburgerBtn = document.getElementById('hamburgerBtn');
-    if (sidebar && overlay && hamburgerBtn) { sidebar.classList.remove('open'); overlay.classList.remove('active'); hamburgerBtn.classList.remove('hidden'); sidebarOpen = false; }
-}
-
-function loadRecentChats() {
-    const recentsList = document.getElementById('recentsList');
-    if (!recentsList) return;
-    if (recentChats.length === 0) recentsList.innerHTML = `<div class="recent-item" style="color: #666; text-align: center; padding: 20px; cursor: default;">Nenhuma conversa ainda<br><small>Inicie uma conversa para ver o histórico</small></div>`;
-    else recentsList.innerHTML = recentChats.map(chat => `<div class="recent-item ${chat.id === currentChatId ? 'current-chat' : ''}" onclick="loadChatFromSidebar('${chat.id}')">${escapeHtml(chat.title)}</div>`).join('');
-}
-
-function updateThinkingStatusInSidebar() {
-    const thinkingStatus = document.getElementById('thinkingStatus');
-    if (thinkingStatus) thinkingStatus.textContent = currentThinkingMode ? 'Ativado' : 'Desativado';
-}
-
-function addChatToRecents(chatTitle, chatId) {
-    recentChats = recentChats.filter(chat => chat.id !== chatId);
-    recentChats.unshift({ id: chatId || generateChatId(), title: chatTitle, timestamp: new Date().toISOString() });
-    if (recentChats.length > 15) recentChats = recentChats.slice(0, 15);
-    if (sidebarOpen) loadRecentChats();
-}
-
-function loadChatFromSidebar(chatId) {
-    currentChatId = chatId;
-    loadRecentChats();
-    closeClaudeSidebar();
-    console.log('Carregando chat:', chatId);
-}
-
+// =================== INFO DO TITAN ===================
 function showTitanInfo() {
     const modal = document.getElementById('titanInfoModal');
+    if (!modal) return;
     const modeIcon = document.getElementById('modeIcon');
     const modeText = document.getElementById('modeText');
-    modeIcon.textContent = currentThinkingMode ? '' : '⚡';
-    modeText.textContent = currentThinkingMode ? 'Raciocínio Profundo' : 'Resposta Direta';
+    if (modeIcon) modeIcon.textContent = currentThinkingMode ? '' : '⚡';
+    if (modeText) modeText.textContent = currentThinkingMode ? 'Raciocínio Profundo' : 'Resposta Direta';
     modal.style.display = 'flex';
-    closeClaudeSidebar();
 }
 
 function closeTitanInfo() {
     const modal = document.getElementById('titanInfoModal');
-    modal.style.display = 'none';
-}
-
-function generateChatId() {
-    return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-}
-
-function generateChatTitle(message) {
-    if (!message) return "Nova conversa";
-    let title = message.substring(0, 40);
-    if (message.length > 40) title += "...";
-    title = title.replace(/[^\w\s\-\.\,\!\?]/g, '');
-    return title || "Nova conversa";
+    if (modal) modal.style.display = 'none';
 }
 
 // =================== DROPDOWN DE CONFIGURAÇÕES ===================
@@ -1013,7 +867,7 @@ async function copyMessage(button) {
         const messageContent = messageContainer.querySelector('.message-content');
         if (messageContent) textToCopy = messageContent.innerText || messageContent.textContent || '';
         if (!textToCopy) { const streamingContent = messageContainer.querySelector('.streaming-content'); if (streamingContent) textToCopy = streamingContent.innerText || streamingContent.textContent || ''; }
-        if (!textToCopy) { const assistantMessage = messageContainer.querySelector('.assistant-message'); if (assistantMessage) { const clone = assistantMessage.cloneNode(true); const thinkingContainer = clone.querySelector('.thinking-container'); const messageActions = clone.querySelector('.message-actions'); if (thinkingContainer) thinkingContainer.remove(); if (messageActions) messageActions.remove(); textToCopy = clone.innerText || clone.textContent || ''; } }
+        if (!textToCopy) { const assistantMessage = messageContainer.querySelector('.assistant-message'); if (assistantMessage) { const clone = assistantMessage.cloneNode(true); const thinkingContainer = clone.querySelector('.thinking-bar'); const messageActions = clone.querySelector('.message-actions'); if (thinkingContainer) thinkingContainer.remove(); if (messageActions) messageActions.remove(); textToCopy = clone.innerText || clone.textContent || ''; } }
         if (!textToCopy || textToCopy.trim().length === 0) return;
         textToCopy = textToCopy.trim();
         let copiouSucesso = false;
@@ -1090,7 +944,7 @@ function refreshMessages() {
         const mode = currentThinkingMode ? 'Raciocínio' : 'Direto';
         const safeMode = sanitizeAttribute(mode);
         msg.setAttribute('data-mode', safeMode);
-        const thinkingContainer = msg.querySelector('.thinking-container');
+        const thinkingContainer = msg.querySelector('.thinking-bar');
         if (thinkingContainer) currentThinkingMode ? thinkingContainer.style.opacity = '1' : thinkingContainer.style.opacity = '0.7';
     });
     console.log(`${assistantMessages.length} mensagens atualizadas para modo: ${currentThinkingMode ? 'Raciocínio' : 'Direto'}`);
@@ -1131,11 +985,8 @@ window.showKeyboardShortcuts = showKeyboardShortcuts;
 window.closeModal = closeModal;
 window.startNewChat = startNewChat;
 window.backToWelcome = backToWelcome;
-window.toggleThinking = toggleThinking;
+window.toggleThinkingBar = toggleThinkingBar;
 window.cancelCurrentRequest = cancelCurrentRequest;
-window.toggleClaudeSidebar = toggleClaudeSidebar;
-window.openClaudeSidebar = openClaudeSidebar;
-window.closeClaudeSidebar = closeClaudeSidebar;
 window.showTitanInfo = showTitanInfo;
 window.closeTitanInfo = closeTitanInfo;
 window.closeConfigDropdownChat = closeConfigDropdownChat;
@@ -1145,9 +996,6 @@ window.likeMessage = likeMessage;
 window.dislikeMessage = dislikeMessage;
 window.copyMessage = copyMessage;
 window.addMessageActions = addMessageActions;
-window.openProModal = openProModal;
-window.closeProModal = closeProModal;
-window.selectPlan = selectPlan;
 
 console.log('Sistema de ações das mensagens ATIVO!');
 console.log('Titan Chat - Sistema com STREAMING REAL carregado!');
