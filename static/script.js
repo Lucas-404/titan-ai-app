@@ -17,230 +17,154 @@ let conversationHistory = [];
 let isNewSession = true;
 
 // Variáveis de controle
-let currentRequest = null; // AbortController para cancelar requests
-let userMessageCount = 0; // Contador de mensagens do usuário
-let feedbackShown = false; // Se já mostrou o feedback
-let isGenerating = false; // Estado de geração ativa
+let currentRequest = null;
+let userMessageCount = 0;
+let feedbackShown = false;
+let isGenerating = false;
 
-//  CSRF Token
+// CSRF Token
 let csrfToken = null;
 
-// =================== 🔒 FUNÇÕES DE SEGURANÇA ===================
+// ===================  FUNÇÕES DE SEGURANÇA ===================
 function escapeHtml(text) {
-    /**
-     * 🔒 ESCAPE ULTRA SEGURO - Previne XSS
-     */
-    if (!text || typeof text !== 'string') {
-        return '';
-    }
-
-    //  ADICIONAR O CÓDIGO QUE FALTAVA:
+    if (!text || typeof text !== 'string') return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
 function sanitizeAttribute(attr) {
-    /**
-     * 🔒 SANITIZAÇÃO DE ATRIBUTOS
-     */
-    if (!attr || typeof attr !== 'string') {
-        return '';
-    }
-
-    // Escapar e limitar tamanho
+    if (!attr || typeof attr !== 'string') return '';
     return escapeHtml(attr.substring(0, 200));
 }
 
 function validateInput(input) {
-    /**
-     * 🔒 VALIDAÇÃO DE INPUT DO USUÁRIO
-     */
-    if (!input || typeof input !== 'string') {
-        return false;
-    }
-
-    // Limites de segurança
+    if (!input || typeof input !== 'string') return false;
     if (input.length > 2000) {
         showToast('Mensagem muito longa (máximo 2000 caracteres)', 'error');
         return false;
     }
-
-    // Detectar tentativas de injection
-    const dangerousPatterns = [
-        /<script/i,
-        /javascript:/i,
-        /data:text\/html/i,
-        /vbscript:/i,
-        /on\w+\s*=/i,
-        /<iframe/i,
-        /<object/i,
-        /<embed/i
-    ];
-
-    for (const pattern of dangerousPatterns) {
-        if (pattern.test(input)) {
-            return false;
-        }
-    }
-
+    const dangerousPatterns = [/<\script/i, /javascript:/i, /data:text\/html/i, /vbscript:/i, /on\w+\s*=/i, /<iframe/i, /<object/i, /<embed/i];
+    for (const pattern of dangerousPatterns) if (pattern.test(input)) return false;
     return true;
 }
 
 function formatMessage(content) {
-    /**
-     * 🔒 FORMATAÇÃO SEGURA DE MENSAGEM
-     */
-    if (!content || typeof content !== 'string') {
-        return '';
-    }
-
-    // 1. PRIMEIRO: Escapar TUDO
+    if (!content || typeof content !== 'string') return '';
     let safeContent = escapeHtml(content);
-
-    // 2. DEPOIS: Aplicar formatação CONTROLADA
-    // Bold (**texto**)
     safeContent = safeContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-    // Italic (*texto*)
     safeContent = safeContent.replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-    // Code (`código`)
     safeContent = safeContent.replace(/`(.*?)`/g, '<code>$1</code>');
-
-    // Line breaks
     safeContent = safeContent.replace(/\n/g, '<br>');
-
     return safeContent;
 }
 
-// =================== 🔒 CSRF TOKEN MANAGEMENT ===================
+// ===================  CSRF TOKEN MANAGEMENT ===================
 function initializeCsrfToken() {
-    /**
-     * 🔒 Inicializar CSRF token
-     */
     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-    if (csrfMeta) {
-        csrfToken = csrfMeta.getAttribute('content');
-        console.log('🔒 CSRF token carregado');
-    } else {
-        console.log('⚠️ CSRF token não encontrado - continuando sem');
-    }
+    if (csrfMeta) { csrfToken = csrfMeta.getAttribute('content'); console.log(' CSRF token carregado'); }
+    else console.log(' CSRF token não encontrado - continuando sem');
 }
 
 function getHeaders() {
-    /**
-     * 🔒 Headers seguros para requests
-     */
-    const headers = {
-        'Content-Type': 'application/json'
-    };
-
-    if (csrfToken) {
-        headers['X-CSRFToken'] = csrfToken;
-    }
-
+    const headers = { 'Content-Type': 'application/json' };
+    if (csrfToken) headers['X-CSRFToken'] = csrfToken;
     return headers;
 }
 
+// =================== FUNÇÃO UTILITÁRIA CONSOLIDADA ===================
+function addThinkingCommand(message) {
+    const finalMessage = message.trim();
+    const hasManualCommand = finalMessage.includes('/think') || finalMessage.includes('/no_think');
+    if (!hasManualCommand) return currentThinkingMode ? finalMessage + ' /think' : finalMessage + ' /no_think';
+    return finalMessage;
+}
+
 // =================== INICIALIZAÇÃO ===================
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Titan Chat - Sistema carregado!');
-
-    //  INICIALIZAR CSRF TOKEN PRIMEIRO
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('Titan Chat - Sistema carregado!');
+    if (mainInput) { mainInput.disabled = true; mainInput.placeholder = 'Conectando ao servidor...'; }
     initializeCsrfToken();
-
-    clearCurrentSession();
-    initializeCleanWelcome();
     createParticles();
     setupEventListeners();
-    initializeOriginalSystem();
     initializeThinkingMode();
     setupThinkingModeClickOutside();
     initializeFeedbackSystem();
-
-    if (mainInput) {
-        mainInput.focus();
+    try {
+        await initializeUserSession();
+        if (mainInput) { mainInput.disabled = false; mainInput.placeholder = 'Pergunte ao Titan'; mainInput.focus(); }
+        initializeCleanWelcome();
+        initializeOriginalSystem();
+    } catch (error) {
+        console.error('Falha crítica na inicialização da sessão:', error);
+        if (mainInput) mainInput.placeholder = 'Erro de conexão. Tente recarregar a página.';
+        showToast('Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.', 'error');
     }
-
     console.log('✨ Sistema inicializado!');
 });
 
 // =================== WELCOME LIMPO ===================
 function initializeCleanWelcome() {
     isInChatMode = false;
-
-    if (welcomeContainer) {
-        welcomeContainer.style.display = 'flex';
-        welcomeContainer.style.opacity = '1';
-        welcomeContainer.classList.remove('hidden');
-    }
-
-    if (chatContainer) {
-        chatContainer.style.display = 'none';
-        chatContainer.style.opacity = '0';
-        chatContainer.classList.remove('active');
-    }
-
-    console.log('🎯 Welcome inicializado');
+    if (welcomeContainer) { welcomeContainer.style.display = 'flex'; welcomeContainer.style.opacity = '1'; welcomeContainer.classList.remove('hidden'); }
+    if (chatContainer) { chatContainer.style.display = 'none'; chatContainer.style.opacity = '0'; chatContainer.classList.remove('active'); }
+    console.log(' Welcome inicializado');
 }
 
 // =================== SISTEMA ORIGINAL ===================
 async function initializeOriginalSystem() {
-    try {
-        await updateSystemStatus();
-        console.log('🔗 Sistema integrado');
-    } catch (error) {
-        console.warn('⚠️ Erro ao inicializar sistema:', error);
-    }
+    try { await updateSystemStatus(); console.log('🔗 Sistema integrado'); } catch (error) { console.warn(' Erro ao inicializar sistema:', error); }
 }
 
 async function updateSystemStatus() {
     try {
-        const response = await fetch('/status');
+        const response = await fetchAPI('/status', { credentials: 'include' });
         const data = await response.json();
         const { usuarios_ativos, maximo_usuarios, disponivel } = data;
+        const statusIndicator = document.querySelector('.status-indicator span');
+        if (statusIndicator) {
+            statusIndicator.textContent = disponivel ? `Online • ${usuarios_ativos}/${maximo_usuarios}` : `Ocupado • ${usuarios_ativos}/${maximo_usuarios}`;
+            systemStatus = disponivel ? 'online' : 'busy';
+        }
+    } catch (error) { systemStatus = 'offline'; const statusIndicator = document.querySelector('.status-indicator span'); if (statusIndicator) statusIndicator.textContent = 'Offline'; }
+}
 
-        const statusIndicator = document.querySelector('.status-indicator span');
-        if (statusIndicator) {
-            if (disponivel) {
-                statusIndicator.textContent = `Online • ${usuarios_ativos}/${maximo_usuarios}`;
-                systemStatus = 'online';
-            } else {
-                statusIndicator.textContent = `Ocupado • ${usuarios_ativos}/${maximo_usuarios}`;
-                systemStatus = 'busy';
-            }
-        }
-    } catch (error) {
-        systemStatus = 'offline';
-        const statusIndicator = document.querySelector('.status-indicator span');
-        if (statusIndicator) {
-            statusIndicator.textContent = 'Offline';
-        }
-    }
+// =================== THINKING MODE ===================
+function initializeThinkingMode() {
+    currentThinkingMode = false;
+    applyTheme(false);
+    updateThinkingToggleVisual();
+    console.log(' Thinking mode inicializado');
+}
+
+function applyTheme(thinkingEnabled) {
+    if (thinkingEnabled) document.body.classList.add('thinking-theme');
+    else document.body.classList.remove('thinking-theme');
+}
+
+function updateThinkingToggleVisual() {
+    const toggle = document.getElementById('titanToggle');
+    if (toggle) { currentThinkingMode ? toggle.classList.add('active') : toggle.classList.remove('active'); }
+    updateDropdownThinkingToggle();
+    updateDropdownThinkingToggleChat();
 }
 
 // =================== PARTÍCULAS ===================
 function createParticles() {
     const particlesContainer = document.getElementById('particles');
     if (!particlesContainer) return;
-
     particlesContainer.innerHTML = '';
-    const particleCount = window.innerWidth < 768 ? 30 : 50;
-
+    const particleCount = window.innerWidth < 768 ? 5 : 10;
     for (let i = 0; i < particleCount; i++) {
         const particle = document.createElement('div');
         particle.className = 'particle';
-
-        particle.style.left = Math.random() * 100 + '%';
+        particle.style.left = (Math.random() * 80 + 10) + '%';
         particle.style.animationDelay = Math.random() * 15 + 's';
         particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
-
         const size = Math.random() * 2 + 1;
         particle.style.width = size + 'px';
         particle.style.height = size + 'px';
         particle.style.opacity = Math.random() * 0.3 + 0.1;
-
         particlesContainer.appendChild(particle);
     }
 }
@@ -250,52 +174,13 @@ function updateSendButtonState(generating) {
     isGenerating = generating;
     const sendBtn = document.getElementById('sendBtn');
     const chatSendBtn = document.getElementById('chatSendBtn');
-
     if (generating) {
-        // Modo STOP - botão vermelho com ícone de parar
-        if (sendBtn) {
-            sendBtn.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="6" y="6" width="12" height="12" rx="2"/>
-                </svg>
-            `;
-            sendBtn.classList.add('stop-mode');
-            sendBtn.title = 'Parar geração (ESC)';
-        }
-
-        if (chatSendBtn) {
-            chatSendBtn.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="6" y="6" width="12" height="12" rx="2"/>
-                </svg>
-            `;
-            chatSendBtn.classList.add('stop-mode');
-            chatSendBtn.title = 'Parar geração (ESC)';
-        }
-
-        console.log('🔴 Botões mudaram para modo STOP');
+        if (sendBtn) { sendBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`; sendBtn.classList.add('stop-mode'); sendBtn.title = 'Parar geração (ESC)'; }
+        if (chatSendBtn) { chatSendBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`; chatSendBtn.classList.add('stop-mode'); chatSendBtn.title = 'Parar geração (ESC)'; }
+        console.log(' Botões mudaram para modo STOP');
     } else {
-        // Modo SEND - botão normal com ícone de enviar
-        if (sendBtn) {
-            sendBtn.innerHTML = `
-                <svg viewBox="0 0 24 24">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
-            `;
-            sendBtn.classList.remove('stop-mode');
-            sendBtn.title = 'Enviar mensagem (Enter)';
-        }
-
-        if (chatSendBtn) {
-            chatSendBtn.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
-            `;
-            chatSendBtn.classList.remove('stop-mode');
-            chatSendBtn.title = 'Enviar mensagem (Enter)';
-        }
-
+        if (sendBtn) { sendBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>`; sendBtn.classList.remove('stop-mode'); sendBtn.title = 'Enviar mensagem (Enter)'; }
+        if (chatSendBtn) { chatSendBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>`; chatSendBtn.classList.remove('stop-mode'); chatSendBtn.title = 'Enviar mensagem (Enter)'; }
         console.log('🟢 Botões voltaram para modo SEND');
     }
 }
@@ -303,115 +188,60 @@ function updateSendButtonState(generating) {
 function cancelCurrentRequest() {
     if (currentRequest) {
         console.log('🛑 Cancelando request...');
-
-        //  CANCELAR NO FRONTEND PRIMEIRO
-        try {
-            currentRequest.abort();
-        } catch (abortError) {
-            console.warn('⚠️ Erro ao abortar:', abortError);
-        }
-        
+        try { currentRequest.abort(); } catch (abortError) { console.warn(' Erro ao abortar:', abortError); }
         currentRequest = null;
-
-        //  INFORMAR O BACKEND (sem esperar resposta)
-        fetch('/cancel-request', {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({ action: 'cancel' })
-        }).catch(error => {
-            // Ignorar erros do cancelamento no backend
-            console.warn('⚠️ Backend cancel falhou:', error);
-        });
-
-        //  LIMPAR INTERFACE
-        if (thinking) {
-            thinking.style.display = 'none';
-        }
-
+        fetchAPI('/cancel-request', { method: 'POST', headers: getHeaders(), body: JSON.stringify({ action: 'cancel' }), credentials: 'include' }).catch(error => console.warn(' Backend cancel falhou:', error));
+        if (thinking) thinking.style.display = 'none';
         updateSendButtonState(false);
-
-        //  MENSAGEM DE CANCELAMENTO
-        addMessageToChat('🛑 Geração cancelada', false, {
-            modo: 'Sistema',
-            tempo_resposta: '0ms'
-        });
-
+        addMessageToChat('🛑 Geração cancelada', false, { modo: 'Sistema', tempo_resposta: '0ms' });
         console.log(' Request cancelado com sucesso');
         return true;
     }
-
     console.log('ℹ️ Nenhum request ativo para cancelar');
     return false;
 }
 
 // =================== EVENT LISTENERS ===================
 function setupEventListeners() {
+    if (window.listenersSetup) { console.log(' Event listeners já configurados, ignorando...'); return; }
+    window.listenersSetup = true;
     if (mainInput) {
         mainInput.addEventListener('keydown', handleMainInputKeydown);
         mainInput.addEventListener('focus', handleInputFocus);
         mainInput.addEventListener('blur', handleInputBlur);
         mainInput.addEventListener('input', handleInputResize);
     }
-
-    if (sendBtn) {
-        sendBtn.addEventListener('click', handleSendMessage);
-    }
-
+    if (sendBtn) sendBtn.addEventListener('click', handleSendMessage);
     const toggleBtn = document.getElementById('titanToggle');
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', toggleThinkingClean);
-    }
-
+    if (toggleBtn) toggleBtn.addEventListener('click', toggleThinkingClean);
     setupChatInputListeners();
     window.addEventListener('resize', handleWindowResize);
-    setupKeyboardShortcuts();
     setInterval(updateSystemStatus, 180000);
+    console.log(' Event listeners configurados (protegidos contra duplicação)');
 }
 
 function setupChatInputListeners() {
     const chatInput = document.getElementById('chatInput');
     const chatSendBtn = document.getElementById('chatSendBtn');
-
     if (chatInput) {
-        chatInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendChatMessage();
-            }
-        });
-
-        chatInput.addEventListener('input', function () {
-            this.style.height = 'auto';
-            this.style.height = this.scrollHeight + 'px';
-        });
+        chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } });
+        chatInput.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px'; });
     }
-
-    if (chatSendBtn) {
-        chatSendBtn.addEventListener('click', sendChatMessage);
-    }
+    if (chatSendBtn) chatSendBtn.addEventListener('click', sendChatMessage);
 }
 
 function handleMainInputKeydown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSendMessage();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
 }
 
 function handleInputFocus() {
     const container = mainInput.closest('.main-input-container');
-    if (container) {
-        container.style.borderColor = '#10b981';
-        container.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.15), 0 15px 50px rgba(0, 0, 0, 0.4)';
-    }
+    if (container) { container.style.borderColor = '#10b981'; container.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.15), 0 15px 50px rgba(0, 0, 0, 0.4)'; }
 }
 
 function handleInputBlur() {
     const container = mainInput.closest('.main-input-container');
-    if (container) {
-        container.style.borderColor = '';
-        container.style.boxShadow = '';
-    }
+    if (container) { container.style.borderColor = ''; container.style.boxShadow = ''; }
 }
 
 function handleInputResize() {
@@ -423,488 +253,194 @@ function handleWindowResize() {
     setTimeout(createParticles, 100);
 }
 
-// =================== ATALHOS DE TECLADO ===================
-function setupKeyboardShortcuts() {
-    document.addEventListener('keydown', (e) => {
-        // ESC para cancelar geração ou voltar
-        if (e.key === 'Escape') {
-            if (isGenerating && currentRequest) {
-                // Prioridade: cancelar geração
-                cancelCurrentRequest();
-            } else if (settingsTabVisible) {
-                toggleSettingsTab();
-            } else if (isInChatMode) {
-                backToWelcome();
-            }
-        }
-
-        // Ctrl+K para focar input
-        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-            e.preventDefault();
-            focusCurrentInput();
-        }
-
-        // Ctrl+. para aba de ferramentas
-        if ((e.ctrlKey || e.metaKey) && e.key === '.') {
-            e.preventDefault();
-            toggleSettingsTab();
-        }
-
-        // Ctrl+T para thinking mode
-        if ((e.ctrlKey || e.metaKey) && e.key === 't') {
-            e.preventDefault();
-            toggleThinkingClean();
-        }
-
-        // Ctrl+N para nova conversa
-        if ((e.ctrlKey || e.metaKey) && e.key === 'n' && isInChatMode) {
-            e.preventDefault();
-            startNewChat();
-        }
-
-        // Ctrl+H para histórico
-        if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
-            e.preventDefault();
-            if (typeof toggleHistorySidebar === 'function') {
-                toggleHistorySidebar();
-            }
-        }
-    });
-}
-
-// ===================  STREAMING REAL ===================
+// =================== STREAMING REAL ===================
 async function handleSendMessage() {
-    // Se está gerando, cancelar em vez de enviar
-    if (isGenerating && currentRequest) {
-        cancelCurrentRequest();
-        return;
-    }
-
+    if (isGenerating && currentRequest) { cancelCurrentRequest(); return; }
     const message = mainInput?.value?.trim();
     if (!message) return;
-
     console.log('📤 Enviando mensagem:', message);
-
+    const finalMessage = addThinkingCommand(message);
     if (!isInChatMode) {
         transitionToChat();
-        setTimeout(() => {
-            addMessageToChat(message, true);
-            sendMessageToServer(message);
-        }, 350);
+        setTimeout(() => { addMessageToChat(message, true); sendMessageToServer(finalMessage); }, 350);
     } else {
         addMessageToChat(message, true);
-        await sendMessageToServer(message);
+        await sendMessageToServer(finalMessage);
     }
-
     mainInput.value = '';
     mainInput.style.height = 'auto';
 }
 
 async function sendMessageToServer(message) {
-    if (!validateInput(message)) {
-        return;
-    }
-
-    if (!sessionId) {
-        startNewSession();
-    }
-
-    //  ADICIONAR COMANDO AUTOMATICAMENTE BASEADO NO THINKING MODE
-    let finalMessage = message.trim();
-
-    // Verificar se já tem comando manual
-    const hasManualCommand = finalMessage.includes('/think') || finalMessage.includes('/no_think');
-
-    if (!hasManualCommand) {
-        // Adicionar comando baseado no modo atual
-        if (currentThinkingMode) {
-            finalMessage += ' /think';
-            console.log('🟣 [FRONTEND] Adicionado /think automaticamente');
-        } else {
-            finalMessage += ' /no_think';
-            console.log('🔴 [FRONTEND] Adicionado /no_think automaticamente');
-        }
-    } else {
-        console.log('🎯 [FRONTEND] Comando manual detectado, mantendo original');
-    }
-
-    // Criar novo AbortController
+    if (!validateInput(message)) return;
+    if (!sessionId) startNewSession();
     currentRequest = new AbortController();
     updateSendButtonState(true);
-
-    conversationHistory.push({
-        role: 'user',
-        content: message, //  Salvar a mensagem original sem comando
-        timestamp: new Date().toISOString()
-    });
-
+    if (thinking) { thinking.style.display = 'block'; thinkingText.textContent = ''; }
     const streamContainer = createStreamingContainer();
-
     try {
-        console.log(' Iniciando streaming com mensagem:', finalMessage);
-
-        //  ENVIAR A MENSAGEM COM COMANDO PARA O BACKEND
-        await streamWithFetchStream(finalMessage, streamContainer);
-
-    } catch (error) {
-        if (error.name !== 'AbortError') {
-            showError('Falha na comunicação com o servidor');
+        const response = await fetchAPI('/chat-stream', {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ mensagem: message, thinking_mode: currentThinkingMode }),
+            signal: currentRequest.signal,
+            credentials: 'include'
+        });
+        if (response.status === 429) {
+            const errorData = await response.json();
+            if (errorData.action_required === 'create_account') { showCreateAccountModal(errorData); streamContainer.remove(); return; }
+            else { showError(errorData.error); streamContainer.remove(); return; }
         }
+        if (response.status === 402) {
+            const errorData = await response.json();
+            showFeatureRestrictedModal(errorData);
+            streamContainer.remove();
+            return;
+        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        await processStreamResponse(response, streamContainer);
+    } catch (error) {
+        if (error.name !== 'AbortError') showError('Falha na comunicação com o servidor');
     } finally {
         currentRequest = null;
         updateSendButtonState(false);
-        thinking.style.display = 'none';
+        if (thinking) thinking.style.display = 'none';
     }
+}
+
+function showCreateAccountModal(limitData) {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `<div class="modal-content"><h3>Limite de Mensagens Atingido!</h3><p>Você usou <strong>${limitData.messages_used}/${limitData.limit}</strong> mensagens gratuitas hoje.</p><p>Crie uma conta <strong>gratuita</strong> para continuar conversando com o Titan!</p><div class="modal-benefits"><h4>✨ Benefícios da conta gratuita:</h4><ul><li>Mais mensagens por dia</li><li>Histórico de conversas</li><li>Memória personalizada</li></ul></div><div class="modal-actions"><button onclick="openRegisterForm()" class="btn btn-primary">Criar Conta Grátis</button><button onclick="closeCreateAccountModal()" class="btn btn-secondary">Talvez Depois</button></div></div>`;
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+}
+
+function closeCreateAccountModal() {
+    const modal = document.querySelector('.modal');
+    if (modal) modal.remove();
+}
+
+function openRegisterForm() {
+    closeCreateAccountModal();
+    console.log('Abrir formulário de registro');
+}
+
+function showFeatureRestrictedModal(errorData) {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `<div class="modal-content"><h3>Feature Premium</h3><p>${errorData.error}</p>${errorData.action_required === 'create_account' ? '<button onclick="openRegisterForm()" class="btn btn-primary">Criar Conta Grátis</button>' : '<button onclick="showUpgradeModal()" class="btn btn-primary">Ver Planos Premium</button>'}<button onclick="closeFeatureModal()" class="btn btn-secondary">Fechar</button></div>`;
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+}
+
+function closeFeatureModal() {
+    const modal = document.querySelector('.modal');
+    if (modal) modal.remove();
 }
 
 async function sendChatMessage() {
-    // Se está gerando, cancelar em vez de enviar
-    if (isGenerating && currentRequest) {
-        cancelCurrentRequest();
-        return;
-    }
-
+    if (isGenerating && currentRequest) { cancelCurrentRequest(); return; }
     const chatInput = document.getElementById('chatInput');
     const message = chatInput?.value?.trim();
     if (!message) return;
-
-    //  ADICIONAR COMANDO AUTOMATICAMENTE
-    let finalMessage = message.trim();
-
-    const hasManualCommand = finalMessage.includes('/think') || finalMessage.includes('/no_think');
-
-    if (!hasManualCommand) {
-        if (currentThinkingMode) {
-            finalMessage += ' /think';
-            console.log('🟣 [CHAT] Adicionado /think automaticamente');
-        } else {
-            finalMessage += ' /no_think';
-            console.log('🔴 [CHAT] Adicionado /no_think automaticamente');
-        }
-    }
-
+    const finalMessage = addThinkingCommand(message);
     console.log('📤 Enviando do chat:', finalMessage);
-
-    addMessageToChat(message, true); //  Mostrar mensagem original
+    addMessageToChat(message, true);
     chatInput.value = '';
     chatInput.style.height = 'auto';
-    await sendMessageToServer(finalMessage); //  Enviar com comando
+    await sendMessageToServer(finalMessage);
 }
 
-async function streamWithFetchStream(message, container) {
-    return new Promise((resolve, reject) => {
-        console.log(' Iniciando stream para:', message);
-        let thinkingContainerRef = null; // Inicializar aqui
+async function processStreamResponse(response, container) {
+    console.log(' [STREAM] Processando resposta...');
+    const reader = response.body.getReader();
+    let fullContent = '';
+    let thinkingContent = '';
+    let chunks = 0;
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) { console.log(' [STREAM] Stream completo'); break; }
+        const chunk = new TextDecoder().decode(value);
+        const lines = chunk.split('\n');
+        chunks++;
+        for (const line of lines) {
+            if (line.startsWith('data: ')) {
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.type === 'content' && data.content) {
+                        fullContent += data.content;
+                        // Modificação aqui: Processar o pensamento em tempo real
+                        const { thinkingContainer, thinkingScrollElement, thinkingContent: currentThinkingChunk, afterThinkingContent } = processThinkingInRealTime(fullContent, container);
+                        
+                        // Atualiza o conteúdo principal da mensagem
+                        const contentDiv = container.querySelector('.streaming-content');
+                        if (contentDiv) contentDiv.innerHTML = formatMessage(afterThinkingContent);
 
-        if (currentThinkingMode) {
-            thinkingContainerRef = createThinkingContainer(container);
+                        // Atualiza o conteúdo do pensamento se o modo de pensamento estiver ativo
+                        if (currentThinkingMode && thinkingScrollElement) {
+                            updateThinkingContent(thinkingContainer, currentThinkingChunk);
+                        }
+                    }
+                    if (data.type === 'thinking_done' && data.thinking) { thinkingContent = data.thinking; console.log(' [STREAM] Thinking recebido:', thinkingContent.length, 'chars'); }
+                    if (data.type === 'error') { if (data.action_required === 'create_account') showCreateAccountModal(data); else showError(data.error); streamContainer.remove(); return; }
+                    if (data.type === 'done') { console.log('🏁 [STREAM] Done recebido'); finalizeStreamingMessage(container, fullContent, thinkingContent); return; }
+                } catch (e) { console.warn(' [STREAM] Erro no parse:', e); }
+            }
         }
-        
-        //  TIMEOUT MAIOR PARA OLLAMA
-        const timeoutMs = 60000; // 60 segundos para Ollama responder
-        let timeoutId = null;
-
-        //  TIMEOUT MANUAL EM VEZ DE DEIXAR O BROWSER DECIDIR
-        timeoutId = setTimeout(() => {
-            if (currentRequest && !currentRequest.signal.aborted) {
-                console.warn('⏰ Timeout manual - cancelando request');
-                currentRequest.abort();
-                reject(new Error('Timeout: O modelo demorou muito para responder'));
-            }
-        }, timeoutMs);
-        
-        fetch('/chat-stream', {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({
-                mensagem: message,
-                thinking_mode: currentThinkingMode
-            }),
-            signal: currentRequest.signal
-        })
-        .then(response => {
-            //  LIMPAR TIMEOUT SE RESPOSTA CHEGOU
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-                timeoutId = null;
-            }
-
-            console.log(' Response status:', response.status, 'headers:', Object.fromEntries(response.headers.entries()));
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            if (!response.body) {
-                throw new Error('Response body é null');
-            }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let fullContent = '';
-            let thinkingContent = '';
-            
-            let contentElement = container.querySelector('.streaming-content');
-            let thinkingContainer = null;
-            let isStreamComplete = false;
-            let lastUpdateTime = Date.now();
-
-            // Esconder thinking indicator
-            thinking.style.display = 'none';
-
-            function processStream() {
-                return reader.read().then(({ done, value }) => {
-                    //  ATUALIZAR TIMESTAMP DE ATIVIDADE
-                    lastUpdateTime = Date.now();
-
-                    //  VERIFICAR ABORT MAIS CUIDADOSAMENTE
-                    if (currentRequest && currentRequest.signal.aborted) {
-                        console.log('🛑 Stream abortado pelo usuário');
-                        reader.cancel('Usuário cancelou');
-                        return Promise.resolve();
-                    }
-
-                    if (done) {
-                        console.log(' Stream concluído naturalmente - Content length:', fullContent.length);
-                        
-                        //  VERIFICAR SE REALMENTE TEM CONTEÚDO
-                        if (!fullContent || fullContent.trim().length === 0) {
-                            console.warn('⚠️ Stream terminou sem conteúdo!');
-                            reject(new Error('Stream terminou sem conteúdo'));
-                            return;
-                        }
-
-                        isStreamComplete = true;
-                        finalizeStreamingMessage(container, fullContent, thinkingContent);
-                        resolve(fullContent);
-                        return;
-                    }
-
-                    if (!value || value.length === 0) {
-                        console.warn('⚠️ Chunk vazio recebido, continuando...');
-                        return processStream();
-                    }
-
-                    //  DECODIFICAR COM TRATAMENTO DE ERRO
-                    let decodedChunk;
-                    try {
-                        decodedChunk = decoder.decode(value, { stream: true });
-                    } catch (decodeError) {
-                        console.error(' Erro ao decodificar chunk:', decodeError);
-                        return processStream();
-                    }
-
-                    //  DEBUG DO CHUNK RECEBIDO
-                    console.log('Chunk recebido:', decodedChunk.length, 'bytes');
-
-                    buffer += decodedChunk;
-                    
-                    //  PROCESSAR LINHAS COM MELHOR HANDLING
-                    const lines = buffer.split('\n');
-                    // Manter última linha incompleta no buffer
-                    buffer = lines.pop() || ''; 
-
-                    let hasValidData = false;
-
-                    for (const line of lines) {
-                        const trimmedLine = line.trim();
-                        if (!trimmedLine) continue;
-                        
-                        if (trimmedLine.startsWith('data: ')) {
-                            try {
-                                const jsonData = trimmedLine.slice(5).trim();
-                                if (!jsonData || jsonData === '[DONE]') continue;
-                                
-                                const data = JSON.parse(jsonData);
-                                console.log('📋 SSE Data:', data.type, data.content ? data.content.length + ' chars' : 'no content');
-                                hasValidData = true;
-
-                                if (data.error) {
-                                    console.error(' Erro do servidor:', data.error);
-                                    showError(data.error);
-                                    reject(new Error(data.error));
-                                    return;
-                                }
-
-                                //  THINKING PROCESSING
-                                if (data.type === 'thinking_chunk') {
-                                    const newThinkingChunk = data.content || '';
-                                    if (currentThinkingMode && thinkingContainerRef) {
-                                        thinkingContent += newThinkingChunk; // Acumula o pensamento
-                                        updateThinkingContent(thinkingContainerRef, thinkingContent);
-                                    }
-                                } else if (data.type === 'thinking_done') {
-                                    thinkingContent = data.thinking || '';
-                                    console.log('🧠 Thinking recebido (final):', thinkingContent.length, 'chars');
-                                    
-                                    if (currentThinkingMode && thinkingContainerRef) {
-                                        updateThinkingContent(thinkingContainerRef, thinkingContent);
-                                    }
-                                }
-
-                                //  CONTENT UPDATE COM DEBUG
-                                else if (data.type === 'content') {
-                                    const newContent = data.buffer || data.content || '';
-                                    if (newContent) {
-                                        const oldLength = fullContent.length;
-                                        fullContent += newContent;
-                                        console.log('📝 Conteúdo atualizado:', oldLength, '->', fullContent.length, 'chars');
-                                        
-                                        if (contentElement) {
-                                            contentElement.innerHTML = formatMessage(fullContent);
-                                            scrollToBottom();
-                                        }
-                                    }
-                                }
-
-                                //  COMPLETION
-                                else if (data.type === 'done') {
-                                    console.log('🏁 Stream marcado como concluído pelo servidor');
-                                    fullContent = data.final_content || fullContent;
-                                    thinkingContent = data.thinking || thinkingContent;
-                                    console.log('🏁 Final content length:', fullContent.length);
-                                }
-
-                            } catch (parseError) {
-                                console.warn('⚠️ Erro ao parsear JSON:', parseError.message, 'Linha:', trimmedLine.substring(0, 100));
-                            }
-                        } else if (trimmedLine !== '' && !trimmedLine.startsWith('event:')) {
-                            console.warn('⚠️ Linha não-SSE recebida:', trimmedLine.substring(0, 50) + '...');
-                        }
-                    }
-
-                    //  SE NÃO RECEBEU DADOS VÁLIDOS HÁ MUITO TEMPO, AVISAR
-                    if (!hasValidData && (Date.now() - lastUpdateTime) > 30000) {
-                        console.warn('⚠️ Sem dados válidos há 30s, possível problema na conexão');
-                    }
-
-                    //  CONTINUAR STREAM
-                    return processStream();
-                })
-                .catch(streamError => {
-                    //  LIMPAR TIMEOUT EM CASO DE ERRO
-                    if (timeoutId) {
-                        clearTimeout(timeoutId);
-                        timeoutId = null;
-                    }
-
-                    if (streamError.name === 'AbortError' || (currentRequest && currentRequest.signal.aborted)) {
-                        console.log('🛑 Stream cancelado intencionalmente');
-                        return Promise.resolve();
-                    } else {
-                        console.error(' Erro no stream:', streamError);
-                        throw streamError;
-                    }
-                });
-            }
-
-            return processStream();
-        })
-        .catch(error => {
-            //  LIMPAR TIMEOUT EM CASO DE ERRO
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-                timeoutId = null;
-            }
-
-            if (error.name === 'AbortError' || (currentRequest && currentRequest.signal.aborted)) {
-                console.log('🛑 Fetch cancelado intencionalmente');
-                return Promise.resolve();
-            } else {
-                console.error(' Erro na requisição:', error);
-                showError('Erro na conexão: ' + error.message);
-                reject(error);
-            }
-        });
-    });
-}
-
-//  SCROLL INSTANTÂNEO
-function scrollToBottom() {
-    const messagesContainer = document.getElementById('chatMessages');
-    if (messagesContainer) {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
+    finalizeStreamingMessage(container, fullContent, thinkingContent);
 }
 
-//  FORMATAÇÃO ULTRA-RÁPIDA
-function formatMessage(content) {
-    if (!content || typeof content !== 'string') {
-        return '';
-    }
-
-    //  ESCAPE RÁPIDO
-    const div = document.createElement('div');
-    div.textContent = content;
-    let safeContent = div.innerHTML;
-    
-    //  FORMATAÇÃO MÍNIMA E RÁPIDA
-    return safeContent
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/g, '<br>');
+// FUNÇÃO PRINCIPAL: PROCESSAR THINKING EM TEMPO REAL
+function processThinkingInRealTime(fullContent, container) {
+    let insideThinking = false;
+    let thinkingContent = '';
+    let afterThinkingContent = '';
+    let thinkingContainer = null;
+    let thinkingScrollElement = null;
+    const thinkStartIndex = fullContent.indexOf('<think>');
+    const thinkEndIndex = fullContent.indexOf('</think>');
+    if (thinkStartIndex !== -1) {
+        if (currentThinkingMode && !container.querySelector('.thinking-container')) { thinkingContainer = createThinkingContainerLive(container); thinkingScrollElement = thinkingContainer?.querySelector('.thinking-scroll'); console.log(' Container de thinking criado em tempo real'); }
+        if (thinkEndIndex !== -1) { thinkingContent = fullContent.substring(thinkStartIndex + 7, thinkEndIndex); afterThinkingContent = fullContent.substring(thinkEndIndex + 8).trim(); insideThinking = false; console.log('Thinking completo extraído:', thinkingContent.length, 'chars'); }
+        else { thinkingContent = fullContent.substring(thinkStartIndex + 7); afterThinkingContent = ''; insideThinking = true; }
+        if (!thinkingContainer) thinkingContainer = container.querySelector('.thinking-container');
+        if (!thinkingScrollElement) thinkingScrollElement = thinkingContainer?.querySelector('.thinking-scroll');
+    } else { afterThinkingContent = fullContent; insideThinking = false; }
+    return { insideThinking, thinkingContent, afterThinkingContent, thinkingContainer, thinkingScrollElement };
 }
 
-//  NOVA FUNÇÃO: Criar container de thinking em tempo real
-function createThinkingContainer(messageContainer) {
+// CRIAR CONTAINER DE THINKING LIVE - TAMANHO FIXO
+function createThinkingContainerLive(messageContainer) {
     const assistantDiv = messageContainer.querySelector('.assistant-message');
     if (!assistantDiv) return null;
-
-    // Criar thinking container
-    const thinkingHTML = `
-        <div class="thinking-container live-thinking">
-            <div class="thinking-header" onclick="toggleThinking(this)">
-                <span class="thinking-icon">🧠</span>
-                <span class="thinking-summary">Pensando em tempo real...</span>
-                <span class="thinking-toggle">▼</span>
-            </div>
-            <div class="thinking-content expanded">
-                <div class="thinking-scroll"></div>
-            </div>
-        </div>
-    `;
-
+    const thinkingHTML = `<div class="thinking-container live-thinking"><div class="thinking-header" onclick="toggleThinking(this)"><span class="thinking-icon"></span><span class="thinking-summary">Pensando em tempo real...</span><span class="thinking-toggle">▼</span></div><div class="thinking-content" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease;"><div class="thinking-scroll" style="height: 200px; overflow-y: auto; padding: 10px; font-size: 13px; line-height: 1.4; color: #e5e7eb; background: rgba(0,0,0,0.2); border-radius: 8px;"></div></div></div>`;
     assistantDiv.insertAdjacentHTML('afterbegin', thinkingHTML);
-
     const thinkingContainer = assistantDiv.querySelector('.thinking-container');
-    const thinkingContent = thinkingContainer.querySelector('.thinking-content');
-
-    // Mostrar expandido por padrão durante o thinking
-    thinkingContainer.classList.add('expanded');
-    thinkingContent.style.maxHeight = '300px';
-
+    console.log(' Container de thinking live criado (fechado, tamanho fixo)');
     return thinkingContainer;
 }
 
-//  NOVA FUNÇÃO: Atualizar thinking em tempo real
-function updateThinkingContent(thinkingContainer, content) {
-    if (!thinkingContainer) return;
-
-    const scroll = thinkingContainer.querySelector('.thinking-scroll');
-    if (scroll) {
-        scroll.textContent = content;
-
-        // Auto-scroll para o final
-        scroll.scrollTop = scroll.scrollHeight;
-    }
+// SCROLL INSTANTÂNEO
+function scrollToBottom() {
+    const messagesContainer = document.getElementById('chatMessages');
+    if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-//  FUNÇÕES DE STREAMING REAL
+// NOVA FUNÇÃO: Atualizar thinking em tempo real
+function updateThinkingContent(thinkingContainer, content) {
+    if (!thinkingContainer) return;
+    const scroll = thinkingContainer.querySelector('.thinking-scroll');
+    if (scroll) { scroll.textContent = content; scroll.scrollTop = scroll.scrollHeight; }
+}
+
+// FUNÇÕES DE STREAMING REAL
 function createStreamingContainer() {
     const messagesContainer = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message streaming-message';
-
-    messageDiv.innerHTML = `
-        <div class="avatar assistant-avatar">T</div>
-        <div class="assistant-message">
-            <div class="message-content streaming-content"></div>
-            <div class="streaming-cursor">|</div>
-        </div>
-    `;
-
+    messageDiv.innerHTML = `<div class="assistant-message"><div class="message-content streaming-content"></div><div class="streaming-cursor">|</div></div>`;
     messagesContainer.appendChild(messageDiv);
     scrollToBottom();
     return messageDiv;
@@ -912,74 +448,50 @@ function createStreamingContainer() {
 
 function updateStreamingContent(container, content) {
     const contentDiv = container.querySelector('.streaming-content');
-    if (contentDiv) {
-        contentDiv.innerHTML = formatMessage(content);
-    }
+    if (contentDiv) contentDiv.innerHTML = formatMessage(content);
 }
 
 function finalizeStreamingMessage(container, content, thinking = null) {
     container.classList.remove('streaming-message');
-
     const cursor = container.querySelector('.streaming-cursor');
     if (cursor) cursor.remove();
-
     const assistantDiv = container.querySelector('.assistant-message');
     if (!assistantDiv) return;
 
-    //  ADICIONAR THINKING SE PRESENTE
     if (thinking && thinking.trim() && currentThinkingMode) {
-        const thinkingContainer = assistantDiv.querySelector('.thinking-container');
-        if (thinkingContainer) {
-            const thinkingScroll = thinkingContainer.querySelector('.thinking-scroll');
-            if (thinkingScroll) {
-                thinkingScroll.innerHTML = escapeHtml(thinking);
-            }
-            const thinkingSummary = thinkingContainer.querySelector('.thinking-summary');
-            if (thinkingSummary) {
-                thinkingSummary.textContent = 'Processo de raciocínio';
-            }
-            thinkingContainer.classList.remove('live-thinking');
-            thinkingContainer.classList.remove('expanded');
-            thinkingContainer.querySelector('.thinking-content').style.maxHeight = '0';
-            thinkingContainer.querySelector('.thinking-toggle').textContent = '▼';
+        // CORREÇÃO: Limpa o conteúdo da resposta antes de renderizar.
+        const cleanContent = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        
+        assistantDiv.innerHTML = `<div class="thinking-container"><div class="thinking-header" onclick="toggleThinking(this)"><span class="thinking-icon"></span><span class="thinking-summary">Processo de raciocínio</span><span class="thinking-toggle">▼</span></div><div class="thinking-content"><div class="thinking-scroll">${escapeHtml(thinking)}</div></div></div><div class="message-content">${formatMessage(cleanContent)}</div>`;
+        console.log(' Thinking adicionado à mensagem!');
+    } else {
+        const contentDiv = container.querySelector('.streaming-content');
+        if (contentDiv) { 
+            const cleanContent = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim(); 
+            contentDiv.innerHTML = formatMessage(cleanContent); 
+            contentDiv.classList.remove('streaming-content'); 
         }
-        console.log('🧠 Thinking finalizado e adicionado à mensagem!');
     }
-
-    // Mensagem principal
-    const contentDiv = container.querySelector('.streaming-content');
-    if (contentDiv) {
-        contentDiv.innerHTML = formatMessage(content);
-        contentDiv.classList.remove('streaming-content');
-    }
-
+    setTimeout(() => addMessageActions(container, content, false), 100);
     scrollToBottom();
 }
 
 // =================== TRANSIÇÃO PARA CHAT ===================
 function transitionToChat() {
-    console.log('🔄 Transicionando para chat...');
-
+    console.log(' Transicionando para chat...');
     isInChatMode = true;
-
     if (welcomeContainer) {
         welcomeContainer.style.opacity = '0';
         welcomeContainer.style.transform = 'scale(0.95)';
-
         setTimeout(() => {
             welcomeContainer.style.display = 'none';
             welcomeContainer.classList.add('hidden');
-
             if (chatContainer) {
                 chatContainer.style.display = 'flex';
                 chatContainer.style.opacity = '0';
                 chatContainer.classList.add('active');
-
                 setupChatInterface();
-
-                setTimeout(() => {
-                    chatContainer.style.opacity = '1';
-                }, 50);
+                setTimeout(() => chatContainer.style.opacity = '1', 50);
             }
         }, 300);
     }
@@ -987,146 +499,67 @@ function transitionToChat() {
 
 function setupChatInterface() {
     const messagesContainer = document.getElementById('chatMessages');
-    if (messagesContainer && messagesContainer.children.length === 0) {
-        messagesContainer.innerHTML = '';
-    }
-
-    // Mostrar chat input
+    if (messagesContainer && messagesContainer.children.length === 0) messagesContainer.innerHTML = '';
     const chatInputArea = document.getElementById('chatInputArea');
-    if (chatInputArea) {
-        chatInputArea.style.display = 'block';
-
-        // Focar no input
-        setTimeout(() => {
-            const chatInput = document.getElementById('chatInput');
-            if (chatInput) chatInput.focus();
-        }, 200);
-    }
-
-    console.log('🎮 Interface do chat configurada');
+    if (chatInputArea) { chatInputArea.style.display = 'block'; setTimeout(() => { const chatInput = document.getElementById('chatInput'); if (chatInput) chatInput.focus(); }, 200); }
+    console.log(' Interface do chat configurada');
 }
 
 // =================== VOLTAR PARA WELCOME ===================
 function backToWelcome() {
-    console.log('🔄 Voltando para Welcome...');
-
-    // Cancelar qualquer request ativo antes de sair
-    if (currentRequest) {
-        cancelCurrentRequest();
-    }
-
+    console.log(' Voltando para Welcome...');
+    if (currentRequest) cancelCurrentRequest();
     isInChatMode = false;
-
-    if (chatContainer) {
-        chatContainer.style.opacity = '0';
-        chatContainer.classList.remove('active');
-    }
-
+    if (chatContainer) { chatContainer.style.opacity = '0'; chatContainer.classList.remove('active'); }
     setTimeout(() => {
-        if (chatContainer) {
-            chatContainer.style.display = 'none';
-        }
-
-        // Esconder chat input
+        if (chatContainer) chatContainer.style.display = 'none';
         const chatInputArea = document.getElementById('chatInputArea');
-        if (chatInputArea) {
-            chatInputArea.style.display = 'none';
-        }
-
+        if (chatInputArea) chatInputArea.style.display = 'none';
         if (welcomeContainer) {
             welcomeContainer.style.display = 'flex';
             welcomeContainer.style.opacity = '0';
             welcomeContainer.style.transform = 'scale(0.95)';
             welcomeContainer.classList.remove('hidden');
-
-            setTimeout(() => {
-                welcomeContainer.style.opacity = '1';
-                welcomeContainer.style.transform = 'scale(1)';
-
-                if (mainInput) {
-                    mainInput.value = '';
-                    mainInput.focus();
-                }
-            }, 50);
+            setTimeout(() => { welcomeContainer.style.opacity = '1'; welcomeContainer.style.transform = 'scale(1)'; if (mainInput) { mainInput.value = ''; mainInput.focus(); } }, 50);
         }
     }, 300);
 }
 
-// =================== 🔒 GERENCIAMENTO SEGURO DE MENSAGENS ===================
+// =================== GERENCIAMENTO SEGURO DE MENSAGENS ===================
 function addMessageToChat(content, isUser, systemInfo = null) {
     const messagesContainer = document.getElementById('chatMessages');
-    if (!messagesContainer) {
-        console.error('Elemento #chatMessages não encontrado no DOM!');
-        return;
-    }
-
+    if (!messagesContainer) { console.error('Elemento #chatMessages não encontrado no DOM!'); return; }
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message';
     if (isUser) messageDiv.classList.add('user');
-
     if (isUser) {
         console.log('Adicionando mensagem do usuário:', content);
-
-        // 🔒 CONTEÚDO DO USUÁRIO - ESCAPE TOTAL
         const safeContent = escapeHtml(content);
-
-        messageDiv.innerHTML = `
-            <div class="user-message">
-                <div class="message-content">${safeContent}</div>
-            </div>
-            <div class="avatar user-avatar">U</div>
-        `;
+        messageDiv.innerHTML = `<div class="user-message"><div class="message-content">${safeContent}</div></div>`;
     } else {
-        // 🔒 MENSAGEM DO ASSISTENTE - FORMATAÇÃO SEGURA
         const mode = systemInfo?.modo || (currentThinkingMode ? 'Raciocínio' : 'Direto');
         const tempoResposta = systemInfo?.tempo_resposta || '';
         const temPensamento = systemInfo?.tem_pensamento || false;
         const pensamento = systemInfo?.pensamento || '';
-
         let messageContent = '';
-
         if (currentThinkingMode && temPensamento && pensamento) {
-            // 🔒 ESCAPE PENSAMENTO TAMBÉM
             const safePensamento = escapeHtml(pensamento);
             const safeContent = formatMessage(content);
             const safeMode = sanitizeAttribute(mode);
             const safeTempoResposta = escapeHtml(tempoResposta);
-
-            messageContent = `
-                <div class="avatar assistant-avatar">T</div>
-                <div class="assistant-message message-block" data-mode="${safeMode}">
-                    <div class="thinking-container">
-                        <div class="thinking-header" onclick="toggleThinking(this)">
-                            <span class="thinking-icon">🧠</span>
-                            <span class="thinking-summary">Pensou por ${safeTempoResposta}</span>
-                            <span class="thinking-toggle">▼</span>
-                        </div>
-                        <div class="thinking-content">
-                            <div class="thinking-scroll">${safePensamento}</div>
-                        </div>
-                    </div>
-                    <div class="message-content">${safeContent}</div>
-                </div>
-            `;
+            messageContent = `<div class="assistant-message message-block" data-mode="${safeMode}"><div class="thinking-container"><div class="thinking-header" onclick="toggleThinking(this)"><span class="thinking-icon"></span><span class="thinking-summary">Pensou por ${safeTempoResposta}</span><span class="thinking-toggle">▼</span></div><div class="thinking-content"><div class="thinking-scroll">${safePensamento}</div></div></div><div class="message-content">${safeContent}</div></div>`;
         } else {
-            // 🔒 RESPOSTA SIMPLES - TAMBÉM SEGURA
             const safeContent = formatMessage(content);
             const safeMode = sanitizeAttribute(mode);
             const safeTempoResposta = escapeHtml(tempoResposta);
-
-            messageContent = `
-                <div class="avatar assistant-avatar">T</div>
-                <div class="assistant-message" data-mode="${safeMode}">
-                    <div class="message-content">${safeContent}</div>
-                    ${tempoResposta ? `<div class="response-time">${safeTempoResposta}</div>` : ''}
-                </div>
-            `;
+            messageContent = `<div class="assistant-message" data-mode="${safeMode}"><div class="message-content">${safeContent}</div>${tempoResposta ? `<div class="response-time">${safeTempoResposta}</div>` : ''}</div>`;
         }
-
         messageDiv.innerHTML = messageContent;
     }
-
-    messagesContainer.appendChild(messageDiv);
+    if (!isUser) {
+        messagesContainer.appendChild(messageDiv);
+        setTimeout(() => addMessageActions(messageDiv, content, false), 50);
+    } else messagesContainer.appendChild(messageDiv);
     scrollToBottom();
 }
 
@@ -1134,254 +567,533 @@ function toggleThinking(header) {
     const container = header.parentElement;
     const content = container.querySelector('.thinking-content');
     const toggle = container.querySelector('.thinking-toggle');
-
-    if (!content || !toggle) {
-        console.error('Elementos thinking-content ou thinking-toggle não encontrados!');
-        return;
-    }
-
-    if (container.classList.contains('expanded')) {
-        container.classList.remove('expanded');
-        content.style.maxHeight = '0';
-        toggle.textContent = '▼';
-    } else {
-        container.classList.add('expanded');
-        content.style.maxHeight = content.scrollHeight + 'px';
-        toggle.textContent = '▲';
-    }
+    if (!content || !toggle) { console.error('Elementos thinking-content ou thinking-toggle não encontrados!'); return; }
+    if (container.classList.contains('expanded')) { container.classList.remove('expanded'); content.style.maxHeight = '0'; toggle.textContent = '▼'; console.log(' Thinking fechado'); }
+    else { container.classList.add('expanded'); content.style.maxHeight = '220px'; toggle.textContent = '▲'; console.log(' Thinking aberto'); }
     scrollToBottom();
-}
-
-function scrollToBottom() {
-    const messagesContainer = document.getElementById('chatMessages');
-    if (messagesContainer) {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
 }
 
 function showError(message) {
     const safeMessage = escapeHtml(message);
-    addMessageToChat(` Erro: ${safeMessage}`, false);
+    addMessageToChat(`Erro: ${safeMessage}`, false);
     console.error('Erro no chat:', message);
 }
 
 function showQueueMessage(queueInfo) {
-    const safeMessage = `🕐 Titan está ocupado. Você é o ${escapeHtml(queueInfo.posicao)}º na fila. ` +
-        `Tempo estimado: ${escapeHtml(queueInfo.tempo_estimado_str)}`;
+    const safeMessage = `Titan está ocupado. Você é o ${escapeHtml(queueInfo.posicao)}º na fila. Tempo estimado: ${escapeHtml(queueInfo.tempo_estimado_str)}`;
     addMessageToChat(safeMessage, false);
-
-    setTimeout(() => {
-        const chatInput = document.getElementById('chatInput');
-        const lastMessage = chatInput?.value?.trim();
-        if (lastMessage) {
-            sendMessageToServer(lastMessage);
-        }
-    }, queueInfo.tempo_estimado * 1000);
+    setTimeout(() => { const chatInput = document.getElementById('chatInput'); const lastMessage = chatInput?.value?.trim(); if (lastMessage) sendMessageToServer(lastMessage); }, queueInfo.tempo_estimado * 1000);
 }
 
 // =================== ABA DE FERRAMENTAS ===================
 function toggleSettingsTab() {
     const settingsTab = document.getElementById('settingsTab');
     if (!settingsTab) return;
-
     settingsTabVisible = !settingsTabVisible;
-
-    if (settingsTabVisible) {
-        settingsTab.classList.add('active');
-        updateSettingsButtonStates();
-    } else {
-        settingsTab.classList.remove('active');
-        updateSettingsButtonStates();
-    }
+    if (settingsTabVisible) settingsTab.classList.add('active');
+    else settingsTab.classList.remove('active');
 }
 
 function updateSettingsButtonStates() {
     const settingsBtns = document.querySelectorAll('.settings-btn');
-    settingsBtns.forEach(btn => {
-        if (settingsTabVisible) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
-    });
+    settingsBtns.forEach(btn => settingsTabVisible ? btn.classList.add('active') : btn.classList.remove('active'));
 }
 
-// =================== THINKING MODE ===================
-async function toggleThinkingClean() {
-    const newMode = !currentThinkingMode;
-    console.log('🔄 Mudando thinking mode para:', newMode ? 'ATIVADO' : 'DESATIVADO');
-
+// =================== THINKING MODE E PLANO DO USUÁRIO ===================
+async function checkUserPlanAndUpdateUI() {
     try {
-        const response = await fetch('/thinking-mode', {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({ enabled: newMode })
-        });
-
+        const response = await fetchAPI('/api/user-status', { credentials: 'include' });
         const data = await response.json();
-        console.log(' Resposta do servidor:', data);
-
-        if (data.status === 'sucesso') {
-            currentThinkingMode = newMode;
-            applyTheme(currentThinkingMode);
-            updateThinkingToggleVisual();
-
-            console.log(' Thinking mode atualizado:', currentThinkingMode ? 'ATIVADO' : 'DESATIVADO');
-
-            // Mostrar feedback visual
-            showToast(`🧠 Modo ${currentThinkingMode ? 'Raciocínio' : 'Direto'} ativado`, 'success');
-        } else {
-            console.error(' Erro do servidor:', data);
-            throw new Error('Falha no servidor');
-        }
-    } catch (error) {
-        console.error(' Erro ao alterar thinking mode:', error);
-        // Fallback: aplicar localmente mesmo com erro
-        currentThinkingMode = newMode;
-        applyTheme(currentThinkingMode);
-        updateThinkingToggleVisual();
-    }
+        if (data.logged_in) { updateThinkingModeAvailability(data.plan); updateUsageDisplay(data.usage, data.plan); updateUserInfo(data.user, data.plan); }
+        else if (data.anonymous) { console.log(' Usuário anônimo detectado - parando loop'); return; }
+        else if (!sessionId) await initializeUserSession();
+    } catch (error) { console.error('Erro ao verificar plano:', error); }
 }
 
-async function initializeThinkingMode() {
+async function initializeUserSession() {
+    console.log('🔄 Inicializando sessão...');
     try {
-        const response = await fetch('/thinking-mode');
-        const data = await response.json();
-        currentThinkingMode = data.thinking_mode;
-        applyTheme(currentThinkingMode);
-        updateThinkingToggleVisual();
-        console.log(`🧠 Thinking mode inicial: ${currentThinkingMode ? 'ATIVADO' : 'DESATIVADO'}`);
-    } catch (error) {
-        console.warn('⚠️ Erro ao carregar thinking mode:', error);
-        currentThinkingMode = false;
-        applyTheme(false);
-        updateThinkingToggleVisual();
-    }
+        const response = await fetchAPI('/api/init-session', { method: 'POST', credentials: 'include' });
+        if (response.ok) { const data = await response.json(); console.log(' Sessão inicializada:', data); if (data.session_id) sessionId = data.session_id; }
+    } catch (error) { console.error('Erro ao inicializar sessão:', error); }
 }
 
-function applyTheme(isThinkingMode) {
-    const body = document.body;
-    if (isThinkingMode) {
-        body.classList.add('thinking-theme');
-        console.log('🟣 Tema ROXO ativado');
-    } else {
-        body.classList.remove('thinking-theme');
-        console.log('🟢 Tema VERDE ativado');
-    }
-}
-
-function updateThinkingToggleVisual() {
+function updateThinkingModeForAnonymous() {
     const toggle = document.getElementById('titanToggle');
-    const icon = document.getElementById('thinkingModeIcon');
-    const title = document.getElementById('thinkingModeTitle');
+    if (toggle) toggle.classList.remove('disabled');
+    const thinkingBtns = document.querySelectorAll('.dropdown-toggle');
+    thinkingBtns.forEach(btn => { btn.classList.remove('disabled'); btn.style.opacity = '1'; });
+}
 
-    if (toggle) {
-        if (currentThinkingMode) {
-            toggle.classList.add('active');
-            console.log('🟣 Toggle visual: ATIVADO');
-        } else {
-            toggle.classList.remove('active');
-            console.log('🟢 Toggle visual: DESATIVADO');
-        }
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') if (isGenerating && currentRequest) cancelCurrentRequest();
+        if ((e.ctrlKey || e.metaKey) && e.key === 'n') { e.preventDefault(); startNewChat(); }
+        if ((e.ctrlKey || e.metaKey) && e.key === '/') { e.preventDefault(); showKeyboardShortcuts(); }
+    });
+    console.log('⌨️ Atalhos de teclado configurados');
+}
 
-        if (icon) icon.textContent = '🧠';
-        if (title) title.textContent = 'Pensamento prolongado';
+function updateThinkingModeAvailability(plan) {
+    const toggle = document.getElementById('titanToggle');
+    const thinkingBtns = document.querySelectorAll('.dropdown-toggle');
+    const hasThinkingMode = plan.features.includes('thinking_mode');
+    if (!hasThinkingMode) {
+        if (toggle) { toggle.classList.add('disabled'); toggle.title = `Thinking Mode disponível no plano ${plan.is_premium ? 'Premium' : 'Básico'}`; if (toggle.classList.contains('active')) { toggle.classList.remove('active'); currentThinkingMode = false; } }
+        thinkingBtns.forEach(btn => { btn.classList.add('disabled'); btn.style.opacity = '0.5'; });
+        showUpgradeBadge();
+    } else {
+        if (toggle) { toggle.classList.remove('disabled'); toggle.title = 'Thinking Mode disponível'; }
+        thinkingBtns.forEach(btn => { btn.classList.remove('disabled'); btn.style.opacity = '1'; });
+        hideUpgradeBadge();
     }
+}
+
+function updateUsageDisplay(usage, plan) {
+    let usageDisplay = document.getElementById('usage-display');
+    if (!usageDisplay) usageDisplay = createUsageDisplay();
+    const hourUsed = usage.hour.messages;
+    const hourLimit = plan.messages_per_hour;
+    const dayUsed = usage.day.messages;
+    const dayLimit = plan.messages_per_day;
+    const hourPercent = (hourUsed / hourLimit) * 100;
+    const dayPercent = (dayUsed / dayLimit) * 100;
+    usageDisplay.innerHTML = `<div class="usage-info"><div class="plan-badge">${plan.name}</div><div class="usage-stats"><div class="usage-item ${hourPercent > 80 ? 'warning' : ''}"><span>Hora: ${hourUsed}/${hourLimit}</span><div class="usage-bar"><div class="usage-fill" style="width: ${hourPercent}%"></div></div></div><div class="usage-item ${dayPercent > 80 ? 'warning' : ''}"><span>Hoje: ${dayUsed}/${dayLimit}</span><div class="usage-bar"><div class="usage-fill" style="width: ${dayPercent}%"></div></div></div></div></div>`;
+    if (hourPercent > 90) showLimitWarning('Você usou mais de 90% do limite por hora!');
+    else if (dayPercent > 90) showLimitWarning('Você usou mais de 90% do limite diário!');
+}
+
+function createUsageDisplay() {
+    const display = document.createElement('div');
+    display.id = 'usage-display';
+    display.className = 'usage-display';
+    const chatContainer = document.getElementById('chatContainer');
+    if (chatContainer) chatContainer.insertBefore(display, chatContainer.firstChild);
+    return display;
+}
+
+function showUpgradeBadge() {
+    let badge = document.getElementById('upgrade-badge');
+    if (!badge) {
+        badge = document.createElement('div');
+        badge.id = 'upgrade-badge';
+        badge.className = 'upgrade-badge';
+        badge.innerHTML = `<span>Upgrade para Premium</span><button onclick="showUpgradeModal()">Ver Planos</button>`;
+        document.body.appendChild(badge);
+    }
+    badge.style.display = 'block';
+}
+
+function hideUpgradeBadge() {
+    const badge = document.getElementById('upgrade-badge');
+    if (badge) badge.style.display = 'none';
+}
+
+function showLimitWarning(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-warning limit-warning';
+    toast.innerHTML = `${message}<button onclick="showUpgradeModal()" class="upgrade-btn-small">Fazer Upgrade</button>`;
+    document.body.appendChild(toast);
+    setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 5000);
+}
+
+function showUpgradeModal() {
+    const modal = document.createElement('div');
+    modal.className = 'upgrade-modal';
+    modal.innerHTML = `<div class="upgrade-modal-content"><div class="upgrade-modal-header"><h3>Desbloqueie o Thinking Mode</h3><button onclick="closeUpgradeModal()" class="close-btn">×</button></div><div class="upgrade-modal-body"><p>O <strong>Thinking Mode</strong> permite que o Titan pense em voz alta por mais tempo para dar respostas mais elaboradas.</p><div class="plans-comparison"><div class="plan-card current"><h4>Seu Plano Atual</h4><div class="plan-price">Gratuito</div><ul><li>10 mensagens/hora</li><li>50 mensagens/dia</li><li>❌ Thinking Mode</li></ul></div><div class="plan-card premium"><h4>Plano Básico</h4><div class="plan-price">R$ 19,90/mês</div><ul><li>100 mensagens/hora</li><li>500 mensagens/dia</li><li>Thinking Mode Ilimitado</li></ul><button onclick="selectPlan('basic')" class="btn-upgrade">Escolher Básico</button></div><div class="plan-card pro"><h4>Plano Pro</h4><div class="plan-price">R$ 49,99/mês</div><ul><li>1000 mensagens/hora</li><li>5000 mensagens/dia</li><li>Thinking Mode + Web Search</li></ul><button onclick="selectPlan('pro')" class="btn-upgrade">Escolher Pro</button></div></div></div></div>`;
+    document.body.appendChild(modal);
+}
+
+function closeUpgradeModal() {
+    const modal = document.querySelector('.upgrade-modal');
+    if (modal) modal.remove();
+}
+
+async function createStripeCheckout(priceId) {
+    try {
+        const response = await fetchAPI('/auth/create-checkout-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ price_id: priceId }), credentials: 'include' });
+        const data = await response.json();
+        if (data.checkout_url) window.location.href = data.checkout_url;
+        else alert('Erro ao criar sessão de checkout');
+    } catch (error) { alert('Erro: ' + error.message); }
+}
+
+window.selectPlan = async function (planType) {
+    console.log('🛒 Selecionando plano:', planType);
+    const modal = document.querySelector('.upgrade-modal');
+    if (modal) modal.remove();
+    const priceIds = { 'basic': 'price_1Rb8yJI0nP81FHlVezCBt5jT', 'pro': 'price_1Rb92YI0nP81FHlVGTp9sYKT' };
+    const priceId = priceIds[planType];
+    if (!priceId) { alert('Plano inválido: ' + planType); return; }
+    try {
+        const response = await fetchAPI('/auth/create-checkout-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ price_id: priceId }), credentials: 'include' });
+        const data = await response.json();
+        if (data.checkout_url) window.location.href = data.checkout_url;
+        else alert('Erro: ' + (data.error || 'Sem URL'));
+    } catch (error) { console.error('❌ Erro:', error); alert('Erro: ' + error.message); }
+};
+
+async function toggleThinkingClean() {
+    try {
+        const response = await fetchAPI('/api/user-status', { credentials: 'include' });
+        const data = await response.json();
+        if (data.logged_in) {
+            const hasThinkingMode = data.plan.features.includes('thinking_mode');
+            if (!hasThinkingMode && !currentThinkingMode) { showUpgradePrompt(); return; }
+        }
+    } catch (error) { console.error('Erro ao verificar permissões:', error); }
+    const newMode = !currentThinkingMode;
+    console.log(' Mudando thinking mode para:', newMode ? 'ATIVADO' : 'DESATIVADO');
+    try {
+        const response = await fetchAPI('/thinking-mode', { method: 'POST', headers: getHeaders(), body: JSON.stringify({ enabled: newMode }), credentials: 'include' });
+        const data = await response.json();
+        if (data.status === 'sucesso') { currentThinkingMode = newMode; applyTheme(currentThinkingMode); updateThinkingToggleVisual(); console.log('Thinking mode atualizado:', currentThinkingMode ? 'ATIVADO' : 'DESATIVADO'); }
+        else { console.error('Erro do servidor:', data); throw new Error('Falha no servidor'); }
+    } catch (error) { console.error('Erro ao alterar thinking mode:', error); currentThinkingMode = newMode; applyTheme(currentThinkingMode); updateThinkingToggleVisual(); }
+}
+
+function showUpgradePrompt() {
+    const modal = document.createElement('div');
+    modal.className = 'upgrade-prompt-modal';
+    modal.innerHTML = `<div class="upgrade-prompt-content"><div class="upgrade-prompt-header"><h3>Thinking Mode Premium</h3><button onclick="this.closest('.upgrade-prompt-modal').remove()" class="close-btn">×</button></div><div class="upgrade-prompt-body"><p>O <strong>Thinking Mode</strong> permite que o Titan pense por mais tempo em problemas complexos, oferecendo respostas mais elaboradas e detalhadas.</p><div class="feature-comparison"><div class="plan-column current"><h4>Seu Plano Atual</h4><div class="plan-features"><div class="feature">10 mensagens/hora</div><div class="feature">50 mensagens/dia</div><div class="feature disabled">❌ Thinking Mode</div></div></div><div class="plan-column premium"><h4>Plano Premium</h4><div class="plan-features"><div class="feature">1000 mensagens/hora</div><div class="feature">5000 mensagens/dia</div><div class="feature">Thinking Mode Ilimitado</div></div></div></div></div><div class="upgrade-prompt-footer"><button onclick="this.closest('.upgrade-prompt-modal').remove()" class="btn-secondary">Talvez Depois</button><button onclick="showUpgradeModal()" class="btn-primary">Ver Planos 🚀</button></div></div>`;
+    document.body.appendChild(modal);
+}
+
+// =================== TOAST NOTIFICATIONS ===================
+function showToast(message, type = 'info') {
+    let toast = document.getElementById('toast');
+    if (!toast) { toast = document.createElement('div'); toast.id = 'toast'; toast.className = 'toast'; document.body.appendChild(toast); }
+    toast.textContent = message;
+    toast.className = `toast show ${type}`;
+    setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// =================== FEEDBACK SYSTEM ===================
+function initializeFeedbackSystem() {
+    console.log(' Sistema de feedback inicializado');
+}
+
+function checkForFeedback() {
+    if (userMessageCount >= 5 && !feedbackShown) { feedbackShown = true; console.log(' Momento para feedback chegou'); }
+}
+
+// =================== EVENTOS DE PÁGINA ===================
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) setTimeout(() => { const particles = document.getElementById('particles'); if (particles && particles.children.length === 0) createParticles(); }, 500);
+});
+
+window.addEventListener('beforeunload', (e) => {
+    if (currentRequest) { console.log('🚪 Cancelando request antes de sair da página...'); cancelCurrentRequest(); }
+    if (isGenerating && currentRequest) { e.preventDefault(); e.returnValue = 'Há uma geração em andamento. Tem certeza que deseja sair?'; return e.returnValue; }
+    if (sessionId) navigator.sendBeacon('/end-session', JSON.stringify({ session_id: sessionId, timestamp: new Date().toISOString() }));
+});
+
+function debugSessionInfo() {
+    console.log(' DEBUG Sessão:', { sessionId: sessionId ? sessionId.substring(0, 8) + '...' : 'null', isInChatMode: isInChatMode, conversationHistory: conversationHistory.length, csrfToken: csrfToken ? 'presente' : 'ausente', currentThinkingMode: currentThinkingMode });
+}
+
+// =================== DEBUG FUNCTION ===================
+function debugConnection() {
+    console.log(' === DEBUG CONEXÃO ===');
+    console.log('Estado atual:', { currentRequest: !!currentRequest, isGenerating: isGenerating, sessionId: sessionId, currentThinkingMode: currentThinkingMode });
+    const testController = new AbortController();
+    const startTime = Date.now();
+    fetchAPI('/status', { signal: testController.signal }).then(response => { console.log('Conexão OK -', Date.now() - startTime, 'ms'); return response.json(); }).then(data => console.log('📊 Status do servidor:', data)).catch(error => console.log('Erro de conexão:', error));
+    console.log(' Testando stream...');
+    fetchAPI('/chat-stream', { method: 'POST', headers: getHeaders(), body: JSON.stringify({ mensagem: 'teste rápido', thinking_mode: false }) }).then(response => console.log('📡 Stream response:', response.status, response.headers.get('content-type'))).catch(error => console.log('Erro no stream test:', error));
+}
+
+window.debugConnection = debugConnection;
+
+// =================== MENU LATERAL CLAUDE ===================
+let sidebarOpen = false;
+let currentChatId = null;
+let recentChats = [];
+
+function toggleClaudeSidebar() {
+    sidebarOpen = !sidebarOpen;
+    if (sidebarOpen) openClaudeSidebar();
+    else closeClaudeSidebar();
+}
+
+function openClaudeSidebar() {
+    const sidebar = document.getElementById('claudeSidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const hamburgerBtn = document.getElementById('hamburgerBtn');
+    if (sidebar && overlay && hamburgerBtn) { sidebar.classList.add('open'); overlay.classList.add('active'); hamburgerBtn.classList.add('hidden'); sidebarOpen = true; loadRecentChats(); }
+}
+
+function closeClaudeSidebar() {
+    const sidebar = document.getElementById('claudeSidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const hamburgerBtn = document.getElementById('hamburgerBtn');
+    if (sidebar && overlay && hamburgerBtn) { sidebar.classList.remove('open'); overlay.classList.remove('active'); hamburgerBtn.classList.remove('hidden'); sidebarOpen = false; }
+}
+
+function loadRecentChats() {
+    const recentsList = document.getElementById('recentsList');
+    if (!recentsList) return;
+    if (recentChats.length === 0) recentsList.innerHTML = `<div class="recent-item" style="color: #666; text-align: center; padding: 20px; cursor: default;">Nenhuma conversa ainda<br><small>Inicie uma conversa para ver o histórico</small></div>`;
+    else recentsList.innerHTML = recentChats.map(chat => `<div class="recent-item ${chat.id === currentChatId ? 'current-chat' : ''}" onclick="loadChatFromSidebar('${chat.id}')">${escapeHtml(chat.title)}</div>`).join('');
+}
+
+function updateThinkingStatusInSidebar() {
+    const thinkingStatus = document.getElementById('thinkingStatus');
+    if (thinkingStatus) thinkingStatus.textContent = currentThinkingMode ? 'Ativado' : 'Desativado';
+}
+
+function addChatToRecents(chatTitle, chatId) {
+    recentChats = recentChats.filter(chat => chat.id !== chatId);
+    recentChats.unshift({ id: chatId || generateChatId(), title: chatTitle, timestamp: new Date().toISOString() });
+    if (recentChats.length > 15) recentChats = recentChats.slice(0, 15);
+    if (sidebarOpen) loadRecentChats();
+}
+
+function loadChatFromSidebar(chatId) {
+    currentChatId = chatId;
+    loadRecentChats();
+    closeClaudeSidebar();
+    console.log('Carregando chat:', chatId);
+}
+
+function showTitanInfo() {
+    const modal = document.getElementById('titanInfoModal');
+    const modeIcon = document.getElementById('modeIcon');
+    const modeText = document.getElementById('modeText');
+    modeIcon.textContent = currentThinkingMode ? '' : '⚡';
+    modeText.textContent = currentThinkingMode ? 'Raciocínio Profundo' : 'Resposta Direta';
+    modal.style.display = 'flex';
+    closeClaudeSidebar();
+}
+
+function closeTitanInfo() {
+    const modal = document.getElementById('titanInfoModal');
+    modal.style.display = 'none';
+}
+
+function generateChatId() {
+    return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+}
+
+function generateChatTitle(message) {
+    if (!message) return "Nova conversa";
+    let title = message.substring(0, 40);
+    if (message.length > 40) title += "...";
+    title = title.replace(/[^\w\s\-\.\,\!\?]/g, '');
+    return title || "Nova conversa";
+}
+
+// =================== DROPDOWN DE CONFIGURAÇÕES ===================
+let configDropdownOpen = false;
+
+function toggleConfigDropdown() {
+    const dropdown = document.getElementById('dropdownContent');
+    if (!dropdown) { console.error('Dropdown não encontrado!'); return; }
+    configDropdownOpen = !configDropdownOpen;
+    if (configDropdownOpen) { dropdown.classList.add('show'); updateDropdownThinkingToggle(); }
+    else dropdown.classList.remove('show');
+}
+
+function toggleConfigDropdownChat() {
+    const dropdown = document.getElementById('dropdownContentChat');
+    if (!dropdown) { console.error('Dropdown chat não encontrado!'); return; }
+    if (dropdown.classList.contains('show')) dropdown.classList.remove('show');
+    else { dropdown.classList.add('show'); updateDropdownThinkingToggleChat(); }
+}
+
+function closeConfigDropdown() {
+    const dropdown = document.getElementById('dropdownContent');
+    if (dropdown) dropdown.classList.remove('show');
+    configDropdownOpen = false;
+}
+
+function closeConfigDropdownChat() {
+    const dropdown = document.getElementById('dropdownContentChat');
+    if (dropdown) dropdown.classList.remove('show');
+}
+
+function updateDropdownThinkingToggle() {
+    const toggle = document.getElementById('dropdownThinkingToggle');
+    if (toggle) currentThinkingMode ? toggle.classList.add('active') : toggle.classList.remove('active');
+}
+
+function updateDropdownThinkingToggleChat() {
+    const toggle = document.getElementById('dropdownThinkingToggleChat');
+    if (toggle) currentThinkingMode ? toggle.classList.add('active') : toggle.classList.remove('active');
+}
+
+async function toggleThinkingFromDropdown() {
+    await toggleThinkingClean();
+    updateDropdownThinkingToggle();
+    updateDropdownThinkingToggleChat();
+}
+
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('configDropdown');
+    const dropdownChat = document.getElementById('configDropdownChat');
+    if (dropdown && !dropdown.contains(e.target)) closeConfigDropdown();
+    if (dropdownChat && !dropdownChat.contains(e.target)) closeConfigDropdownChat();
+});
+
+function setupThinkingModeClickOutside() {
+    console.log(' Setup thinking mode click outside configurado');
+}
+
+// =================== SISTEMA DE AÇÕES DAS MENSAGENS ===================
+function addMessageActions(messageContainer, content, isUser = false) {
+    if (isUser) return;
+    const assistantDiv = messageContainer.querySelector('.assistant-message');
+    if (!assistantDiv || assistantDiv.querySelector('.message-actions')) return;
+    const template = document.getElementById('message-actions-template');
+    if (!template) { console.error('Template de ações não encontrado!'); return; }
+    const actionsClone = template.content.cloneNode(true);
+    const actionsContainer = actionsClone.querySelector('.message-actions');
+    actionsContainer.setAttribute('data-content', content);
+    const regenerateBtn = actionsClone.querySelector('.regenerate-btn');
+    const likeBtn = actionsClone.querySelector('.like-btn');
+    const dislikeBtn = actionsClone.querySelector('.dislike-btn');
+    const copyBtn = actionsClone.querySelector('.copy-btn');
+    regenerateBtn.addEventListener('click', () => regenerateMessage(regenerateBtn));
+    likeBtn.addEventListener('click', () => likeMessage(likeBtn));
+    dislikeBtn.addEventListener('click', () => dislikeMessage(dislikeBtn));
+    copyBtn.addEventListener('click', () => copyMessage(copyBtn));
+    assistantDiv.appendChild(actionsClone);
+    console.log('Ações adicionadas à mensagem');
+}
+
+async function regenerateMessage(button) {
+    console.log(' Regenerando mensagem...');
+    button.classList.add('animate');
+    setTimeout(() => button.classList.remove('animate'), 300);
+    const messageContainer = button.closest('.message');
+    const messagesContainer = document.getElementById('chatMessages');
+    const messages = Array.from(messagesContainer.querySelectorAll('.message'));
+    const currentIndex = messages.indexOf(messageContainer);
+    let userMessage = null;
+    for (let i = currentIndex - 1; i >= 0; i--) if (messages[i].classList.contains('user')) { const userContent = messages[i].querySelector('.message-content'); if (userContent) { userMessage = userContent.textContent.trim(); break; } }
+    if (!userMessage) { showToast('Não foi possível encontrar a mensagem anterior', 'error'); return; }
+    const finalMessage = addThinkingCommand(userMessage);
+    messageContainer.remove();
+    await sendMessageToServer(finalMessage);
+}
+
+function likeMessage(button) {
+    console.log('👍 Mensagem curtida');
+    button.classList.add('animate', 'liked');
+    setTimeout(() => button.classList.remove('animate'), 300);
+    const actionsContainer = button.closest('.message-actions');
+    const dislikeBtn = actionsContainer.querySelector('.dislike-btn');
+    if (dislikeBtn) dislikeBtn.classList.remove('disliked');
+    const textSpan = button.querySelector('.action-btn-text');
+    const originalText = textSpan.textContent;
+    textSpan.textContent = 'Obrigado!';
+    setTimeout(() => textSpan.textContent = originalText, 2000);
+    sendFeedbackToServer('like', button);
+}
+
+function dislikeMessage(button) {
+    console.log('👎 Mensagem não curtida');
+    button.classList.add('animate', 'disliked');
+    setTimeout(() => button.classList.remove('animate'), 300);
+    const actionsContainer = button.closest('.message-actions');
+    const likeBtn = actionsContainer.querySelector('.like-btn');
+    if (likeBtn) likeBtn.classList.remove('liked');
+    const textSpan = button.querySelector('.action-btn-text');
+    const originalText = textSpan.textContent;
+    textSpan.textContent = 'Anotado';
+    setTimeout(() => textSpan.textContent = originalText, 2000);
+    sendFeedbackToServer('dislike', button);
+}
+
+async function copyMessage(button) {
+    try {
+        const messageContainer = button.closest('.message');
+        if (!messageContainer) return;
+        let textToCopy = '';
+        const messageContent = messageContainer.querySelector('.message-content');
+        if (messageContent) textToCopy = messageContent.innerText || messageContent.textContent || '';
+        if (!textToCopy) { const streamingContent = messageContainer.querySelector('.streaming-content'); if (streamingContent) textToCopy = streamingContent.innerText || streamingContent.textContent || ''; }
+        if (!textToCopy) { const assistantMessage = messageContainer.querySelector('.assistant-message'); if (assistantMessage) { const clone = assistantMessage.cloneNode(true); const thinkingContainer = clone.querySelector('.thinking-container'); const messageActions = clone.querySelector('.message-actions'); if (thinkingContainer) thinkingContainer.remove(); if (messageActions) messageActions.remove(); textToCopy = clone.innerText || clone.textContent || ''; } }
+        if (!textToCopy || textToCopy.trim().length === 0) return;
+        textToCopy = textToCopy.trim();
+        let copiouSucesso = false;
+        if (navigator.clipboard && navigator.clipboard.writeText) { try { await navigator.clipboard.writeText(textToCopy); copiouSucesso = true; } catch (clipboardError) {} }
+        if (!copiouSucesso) { try { const textarea = document.createElement('textarea'); textarea.value = textToCopy; textarea.style.position = 'fixed'; textarea.style.left = '-9999px'; textarea.style.top = '-9999px'; document.body.appendChild(textarea); textarea.focus(); textarea.select(); const copiado = document.execCommand('copy'); document.body.removeChild(textarea); if (copiado) copiouSucesso = true; } catch (execError) {} }
+        if (copiouSucesso) {
+            button.classList.add('animate', 'copied');
+            setTimeout(() => button.classList.remove('animate'), 300);
+            const textSpan = button.querySelector('.action-btn-text');
+            if (textSpan) { const originalText = textSpan.textContent; textSpan.textContent = 'Copiado!'; setTimeout(() => { textSpan.textContent = originalText; button.classList.remove('copied'); }, 1500); }
+        }
+    } catch (error) { console.error('Erro silencioso:', error); }
+}
+
+async function sendFeedbackToServer(type, button) {
+    try {
+        const actionsContainer = button.closest('.message-actions');
+        const content = actionsContainer.getAttribute('data-content');
+        const response = await fetchAPI('/feedback', { method: 'POST', headers: getHeaders(), body: JSON.stringify({ type: type, content: content, session_id: sessionId, timestamp: new Date().toISOString() }) });
+        if (response.ok) console.log(`Feedback ${type} enviado com sucesso`);
+    } catch (error) { console.warn('Erro ao enviar feedback:', error); }
 }
 
 // =================== OUTRAS FUNÇÕES ===================
 function setQuickExample(example) {
     if (!mainInput) return;
-
-    // 🔒 SANITIZAR EXEMPLO ANTES DE USAR
     const safeExample = escapeHtml(example);
     mainInput.value = safeExample;
     mainInput.focus();
-
     const container = mainInput.closest('.main-input-container');
-    if (container) {
-        container.style.borderColor = '#f59e0b';
-        container.style.boxShadow = '0 0 0 3px rgba(245, 158, 11, 0.15)';
-
-        setTimeout(() => {
-            container.style.borderColor = '';
-            container.style.boxShadow = '';
-        }, 1500);
-    }
+    if (container) { container.style.borderColor = '#f59e0b'; container.style.boxShadow = '0 0 0 3px rgba(245, 158, 11, 0.15)'; setTimeout(() => { container.style.borderColor = ''; container.style.boxShadow = ''; }, 1500); }
 }
 
 function showKeyboardShortcuts() {
     const modal = document.getElementById('shortcutsModal');
-    if (modal) {
-        modal.style.display = 'flex';
-    }
+    if (modal) modal.style.display = 'flex';
 }
 
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.style.display = 'none';
-    }
+    if (modal) modal.style.display = 'none';
 }
 
 function startNewChat() {
-    console.log('🆕 Nova conversa - RESET COMPLETO');
-
-    // Cancelar requests
-    if (currentRequest) {
-        cancelCurrentRequest();
-    }
-
-    // Limpar tudo
+    console.log('Nova conversa - RESET COMPLETO');
+    if (currentRequest) cancelCurrentRequest();
     clearCurrentSession();
     userMessageCount = 0;
     feedbackShown = false;
-
-    // Reset DOM
     const messagesContainer = document.getElementById('chatMessages');
-    if (messagesContainer) {
-        messagesContainer.innerHTML = '';
-    }
-
+    if (messagesContainer) messagesContainer.innerHTML = '';
     const chatInputArea = document.getElementById('chatInputArea');
-    if (chatInputArea) {
-        chatInputArea.style.display = 'none';
-    }
-
-    // FORÇA transição para welcome
+    if (chatInputArea) chatInputArea.style.display = 'none';
     isInChatMode = false;
-
-    if (chatContainer) {
-        chatContainer.style.display = 'none';
-        chatContainer.style.opacity = '0';
-        chatContainer.classList.remove('active');
-    }
-
-    if (welcomeContainer) {
-        welcomeContainer.style.display = 'flex';
-        welcomeContainer.style.opacity = '1';
-        welcomeContainer.style.transform = 'scale(1)';
-        welcomeContainer.classList.remove('hidden');
-    }
-
-    // Focar input
-    if (mainInput) {
-        mainInput.value = '';
-        setTimeout(() => mainInput.focus(), 100);
-    }
-
-    console.log(' Reset completo para welcome');
+    if (chatContainer) { chatContainer.style.display = 'none'; chatContainer.style.opacity = '0'; chatContainer.classList.remove('active'); }
+    if (welcomeContainer) { welcomeContainer.style.display = 'flex'; welcomeContainer.style.opacity = '1'; welcomeContainer.style.transform = 'scale(1)'; welcomeContainer.classList.remove('hidden'); }
+    if (mainInput) { mainInput.value = ''; setTimeout(() => mainInput.focus(), 100); }
+    console.log('Reset completo para welcome');
 }
 
 function focusCurrentInput() {
     const chatInput = document.getElementById('chatInput');
     const mainInput = document.getElementById('mainInput');
+    if (isInChatMode && chatInput && chatInput.offsetParent !== null) chatInput.focus();
+    else if (mainInput) mainInput.focus();
+}
 
-    if (isInChatMode && chatInput && chatInput.offsetParent !== null) {
-        chatInput.focus();
-    } else if (mainInput) {
-        mainInput.focus();
-    }
+function refreshMessages() {
+    const messagesContainer = document.getElementById('chatMessages');
+    if (!messagesContainer) { console.log(' Container de mensagens não encontrado'); return; }
+    const assistantMessages = messagesContainer.querySelectorAll('.assistant-message');
+    if (assistantMessages.length === 0) { console.log(' Nenhuma mensagem do assistente para atualizar'); return; }
+    assistantMessages.forEach((msg, index) => {
+        const mode = currentThinkingMode ? 'Raciocínio' : 'Direto';
+        const safeMode = sanitizeAttribute(mode);
+        msg.setAttribute('data-mode', safeMode);
+        const thinkingContainer = msg.querySelector('.thinking-container');
+        if (thinkingContainer) currentThinkingMode ? thinkingContainer.style.opacity = '1' : thinkingContainer.style.opacity = '0.7';
+    });
+    console.log(`${assistantMessages.length} mensagens atualizadas para modo: ${currentThinkingMode ? 'Raciocínio' : 'Direto'}`);
 }
 
 // =================== GESTÃO DE SESSÃO ===================
@@ -1393,160 +1105,25 @@ function startNewSession() {
     sessionId = generateSessionId();
     conversationHistory = [];
     isNewSession = true;
-
-    // Reset contadores para nova sessão
     userMessageCount = 0;
     feedbackShown = false;
-
-    console.log('🆕 Nova sessão iniciada:', sessionId);
+    console.log('Nova sessão iniciada:', sessionId);
 }
 
 function clearCurrentSession() {
-    // Cancelar request ativo antes de limpar
-    if (currentRequest) {
-        cancelCurrentRequest();
-    }
-
+    if (currentRequest) cancelCurrentRequest();
     sessionId = null;
     conversationHistory = [];
     isNewSession = true;
-
-    // Reset contadores
     userMessageCount = 0;
     feedbackShown = false;
-
     console.log('🧹 Sessão limpa');
 }
 
-// =================== EVENTOS DE PÁGINA ===================
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-        setTimeout(() => {
-            const particles = document.getElementById('particles');
-            if (particles && particles.children.length === 0) {
-                createParticles();
-            }
-        }, 500);
-    }
-});
-
-window.addEventListener('beforeunload', (e) => {
-    // Cancelar request ativo antes de sair da página
-    if (currentRequest) {
-        console.log('🚪 Cancelando request antes de sair da página...');
-        cancelCurrentRequest();
-    }
-
-    // Proteção contra fechamento acidental durante geração
-    if (isGenerating && currentRequest) {
-        e.preventDefault();
-        e.returnValue = 'Há uma geração em andamento. Tem certeza que deseja sair?';
-        return e.returnValue;
-    }
-
-    if (sessionId) {
-        navigator.sendBeacon('/end-session', JSON.stringify({
-            session_id: sessionId,
-            timestamp: new Date().toISOString()
-        }));
-    }
-});
-
-// =================== CLIQUE FORA PARA FECHAR ===================
-function setupThinkingModeClickOutside() {
-    document.addEventListener('click', function (e) {
-        const thinkingButton = document.getElementById('titanToggle');
-        const thinkingSetting = document.querySelector('.thinking-setting');
-        const settingsTab = document.getElementById('settingsTab');
-
-        const settingsButtons = document.querySelectorAll('.settings-btn');
-        let clickedOnSettingsBtn = false;
-        settingsButtons.forEach(btn => {
-            if (btn.contains(e.target)) {
-                clickedOnSettingsBtn = true;
-            }
-        });
-
-        // Verificar se clicou fora de todos os elementos relacionados
-        if (!thinkingButton?.contains(e.target) &&
-            !thinkingSetting?.contains(e.target) &&
-            !settingsTab?.contains(e.target) &&
-            !clickedOnSettingsBtn) {
-
-            // Se o settings tab estiver aberto, fechar apenas ele
-            if (settingsTabVisible) {
-                toggleSettingsTab();
-            }
-        }
-    });
-}
-
-function debugSessionInfo() {
-    console.log('DEBUG Sessão:', {
-        sessionId: sessionId ? sessionId.substring(0, 8) + '...' : 'null',
-        isInChatMode: isInChatMode,
-        conversationHistory: conversationHistory.length,
-        csrfToken: csrfToken ? 'presente' : 'ausente',
-        currentThinkingMode: currentThinkingMode
-    });
-}
-
-// =================== DEBUG FUNCTION ===================
-// =================== DEBUG MELHORADO ===================
-function debugConnection() {
-    console.log('=== DEBUG CONEXÃO ===');
-    console.log('Estado atual:', {
-        currentRequest: !!currentRequest,
-        isGenerating: isGenerating,
-        sessionId: sessionId,
-        currentThinkingMode: currentThinkingMode
-    });
-    
-    // Testar timeout do navegador
-    const testController = new AbortController();
-    const startTime = Date.now();
-    
-    fetch('/status', { 
-        signal: testController.signal 
-    })
-    .then(response => {
-        console.log(' Conexão OK -', Date.now() - startTime, 'ms');
-        return response.json();
-    })
-    .then(data => {
-        console.log(' Status do servidor:', data);
-    })
-    .catch(error => {
-        console.log(' Erro de conexão:', error);
-    });
-    
-    // Testar streaming básico
-    console.log(' Testando stream...');
-    fetch('/chat-stream', {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({
-            mensagem: 'teste rápido',
-            thinking_mode: false
-        })
-    })
-    .then(response => {
-        console.log(' Stream response:', response.status, response.headers.get('content-type'));
-        if (response.body) {
-            console.log(' Response body disponível');
-        } else {
-            console.log(' Response body NULL');
-        }
-    })
-    .catch(error => {
-        console.log(' Erro no stream test:', error);
-    });
-}
-
-// Exportar para console
-window.debugConnection = debugConnection;
-
 // =================== EXPORTAR FUNÇÕES GLOBAIS ===================
+window.toggleConfigDropdown = toggleConfigDropdown;
+window.closeConfigDropdown = closeConfigDropdown;
+window.toggleThinkingFromDropdown = toggleThinkingFromDropdown;
 window.setQuickExample = setQuickExample;
 window.toggleSettingsTab = toggleSettingsTab;
 window.toggleThinkingClean = toggleThinkingClean;
@@ -1556,5 +1133,28 @@ window.startNewChat = startNewChat;
 window.backToWelcome = backToWelcome;
 window.toggleThinking = toggleThinking;
 window.cancelCurrentRequest = cancelCurrentRequest;
+window.toggleClaudeSidebar = toggleClaudeSidebar;
+window.openClaudeSidebar = openClaudeSidebar;
+window.closeClaudeSidebar = closeClaudeSidebar;
+window.showTitanInfo = showTitanInfo;
+window.closeTitanInfo = closeTitanInfo;
+window.closeConfigDropdownChat = closeConfigDropdownChat;
+window.toggleConfigDropdownChat = toggleConfigDropdownChat;
+window.regenerateMessage = regenerateMessage;
+window.likeMessage = likeMessage;
+window.dislikeMessage = dislikeMessage;
+window.copyMessage = copyMessage;
+window.addMessageActions = addMessageActions;
+window.openProModal = openProModal;
+window.closeProModal = closeProModal;
+window.selectPlan = selectPlan;
 
-console.log(' Titan Chat - Sistema com STREAMING REAL carregado!');
+console.log('Sistema de ações das mensagens ATIVO!');
+console.log('Titan Chat - Sistema com STREAMING REAL carregado!');
+
+// =================== FUNÇÃO AJAX FETCH ===================
+async function fetchAPI(url, options = {}) {
+    const defaultOptions = { credentials: 'include', ...options };
+    try { const response = await fetch(url, defaultOptions); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); return response; }
+    catch (error) { console.error('Erro na requisição:', error); throw error; }
+}

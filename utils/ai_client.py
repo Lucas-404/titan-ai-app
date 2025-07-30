@@ -455,11 +455,12 @@ COMPORTAMENTO:
             return {"error": "Erro no processamento de ferramentas"}
 
     def send_message_streaming(self, messages, thinking_mode=False, use_tools=True, session_id=None, request_id=None):
-        """ STREAMING ULTRA-OTIMIZADO - CORRIGIDO"""
+        """ STREAMING ULTRA-OTIMIZADO - LÓGICA FINAL E ROBUSTA """
         try:
-            print(f" [STREAM] Streaming otimizado - thinking: {thinking_mode}")
+            print(f" [STREAM] Iniciando stream. Modo Thinking: {thinking_mode}")
             
-            #  PAYLOAD COM CONFIGURAÇÕES OTIMIZADAS
+            # Payload para Ollama. O comando /think na mensagem do usuário instrui o modelo
+            # a gerar as tags <think>...</think>.
             payload = {
                 "model": self.model,
                 "messages": messages,
@@ -467,134 +468,77 @@ COMPORTAMENTO:
                 "options": {
                     "temperature": self.temperature,
                     "num_predict": self.max_tokens,
-                    "num_batch": 128,
                     "repeat_penalty": 1.05,
-                    "top_k": 40,
-                    "top_p": 0.9,
                 }
             }
 
-            print(f" [STREAM] Fazendo request para Ollama...")
-
-            #  REQUEST COM TIMEOUT OTIMIZADO
             response = requests.post(
-                self.base_url,
-                json=payload,
-                timeout=300,  # 5 minutos - suficiente para Ollama
-                stream=True,
+                self.base_url, json=payload, timeout=300, stream=True,
                 headers={"Content-Type": "application/json"}
             )
 
-            print(f" [STREAM] Response status: {response.status_code}")
-
             if response.status_code != 200:
-                print(f" [STREAM] Ollama erro {response.status_code}: {response.text[:200]}")
                 yield {"error": f"Ollama erro {response.status_code}"}
                 return
 
-            #  BUFFERS OTIMIZADOS
-            full_content = ""
-            thinking_content = ""
+            # Buffers para acumular a resposta
+            full_response_content = ""
             chunk_count = 0
-            thinking_sent = False  # ← VARIÁVEL LOCAL EM VEZ DE ATRIBUTO
 
-            THINK_PATTERN = re.compile(r'<think>(.*?)</think>', re.DOTALL)
-
-            print(f" [STREAM] Iniciando processamento de chunks...")
-
-            for line in response.iter_lines(decode_unicode=True, chunk_size=self.stream_chunk_size):
+            # Processa o stream chunk por chunk
+            for line in response.iter_lines(decode_unicode=True, chunk_size=8192):
                 if not line.strip():
                     continue
-
                 try:
                     chunk_data = json.loads(line)
                     chunk_count += 1
                     
-                    #  DEBUG DE CHUNKS
-                    if chunk_count % 50 == 0:
-                        print(f" [STREAM] Processado {chunk_count} chunks, conteúdo: {len(full_content)} chars")
-                    
                     if "message" in chunk_data:
-                        content = chunk_data["message"].get("content", "")
-                        
-                        if content:
-                            full_content += content
-                            
-                            #  PROCESSAMENTO DE THINKING OTIMIZADO
-                            if thinking_mode:
-                                think_match = THINK_PATTERN.search(full_content)
-                                if think_match:
-                                    thinking_content = think_match.group(1).strip()
-                                    clean_content = THINK_PATTERN.sub('', full_content).strip()
-                                    
-                                    if thinking_content and not thinking_sent:
-                                        print(f" [STREAM] Enviando thinking: {len(thinking_content)} chars")
-                                        yield {
-                                            "type": "thinking_done",
-                                            "thinking": thinking_content
-                                        }
-                                        thinking_sent = True
-                                    
-                                    yield {
-                                        "type": "content",
-                                        "content": content,
-                                        "buffer": clean_content
-                                    }
-                                else:
-                                    yield {
-                                        "type": "content", 
-                                        "content": content,
-                                        "buffer": full_content
-                                    }
-                            else:
-                                #  MODO DIRETO - REMOVE THINKING AUTOMATICAMENTE
-                                clean_content = THINK_PATTERN.sub('', full_content).strip()
-                                yield {
-                                    "type": "content",
-                                    "content": content,
-                                    "buffer": clean_content
-                                }
+                        content_chunk = chunk_data["message"].get("content", "")
+                        if content_chunk:
+                            # Acumula a resposta completa no buffer
+                            full_response_content += content_chunk
+                            # Envia o pedaço de conteúdo para o frontend para efeito de "digitação"
+                            yield {"type": "content", "content": content_chunk}
                     
                     if chunk_data.get("done", False):
-                        print(f" [STREAM] Ollama sinalizou done=True")
                         break
-                        
-                except json.JSONDecodeError as e:
-                    print(f" [STREAM] JSON decode error: {e}")
-                    continue
-                except Exception as chunk_error:
-                    print(f" [STREAM] Erro no chunk: {chunk_error}")
+                except (json.JSONDecodeError, Exception):
                     continue
 
-            #  LIMPEZA FINAL
-            final_content = THINK_PATTERN.sub('', full_content).strip()
+            # --- LÓGICA DE PÓS-PROCESSAMENTO ---
+            # O stream terminou. Agora processamos a resposta completa que acumulamos.
             
-            print(f" [STREAM] Finalizando - Content: {len(final_content)} chars, Thinking: {len(thinking_content)} chars")
+            pensamento_extraido = None
+            resposta_final = full_response_content
+
+            # Se o modo de pensamento estiver ativo, procuramos pelas tags
+            if thinking_mode and "<think>" in full_response_content and "</think>" in full_response_content:
+                match = re.search(r'<think>(.*?)</think>', full_response_content, re.DOTALL)
+                if match:
+                    pensamento_extraido = match.group(1).strip()
+                    # A resposta final é o conteúdo original sem o bloco de pensamento
+                    resposta_final = re.sub(r'<think>.*?</think>', '', full_response_content, re.DOTALL).strip()
             
-            yield {
-                "type": "done", 
-                "final_content": final_content,
-                "thinking": thinking_content if thinking_mode else None,
-                "stats": {
-                    "chunks_processed": chunk_count,
-                    "total_chars": len(final_content)
+            # Se um pensamento foi extraído, enviamos em um evento separado
+            if pensamento_extraido:
+                yield {
+                    "type": "thinking_done",
+                    "thinking": pensamento_extraido
                 }
+                print(f" [STREAM] Pensamento extraído e enviado ({len(pensamento_extraido)} chars).")
+
+            # Enviamos o evento final de "done"
+            yield {
+                "type": "done",
+                "final_content": resposta_final,
+                "stats": {"chunks": chunk_count, "length": len(full_response_content)}
             }
 
-            print(f" [STREAM] Stream completo com {chunk_count} chunks processados")
+            print(f" [STREAM] Stream finalizado com sucesso.")
 
-        except requests.exceptions.Timeout as timeout_error:
-            print(f" [STREAM] Timeout: {timeout_error}")
-            yield {"error": "Timeout - Ollama demorou muito para responder"}
-        
-        except requests.exceptions.ConnectionError as conn_error:
-            print(f"🔌 [STREAM] Erro de conexão: {conn_error}")
-            yield {"error": "Erro de conexão com Ollama"}
-        
         except Exception as e:
-            print(f" [STREAM] Erro inesperado: {e}")
-            import traceback
-            traceback.print_exc()
-            yield {"error": f"Erro no streaming: {str(e)}"}
+            print(f" [STREAM] Erro fatal no streaming: {e}")
+            yield {"error": f"Erro inesperado no streaming: {str(e)}"}
 
 ai_client = AIClient()

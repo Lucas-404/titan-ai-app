@@ -3,42 +3,100 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Titan AI - Inteligência Artificial Avançada</title>
-    
-    <!--  CSRF TOKEN CRÍTICO -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Titan AI</title>
+
+    <!-- ✅ CSRF TOKEN CRÍTICO -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    
+
     <link rel="stylesheet" href="/static/styles.css">
     <link rel="icon" type="image/png"
         href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAM5JREFUWEftl0sOwiAMRFszC9i4hW1c2cLCxkbA3i2gD7AQCwk1k7YQe2X+/z2SkpJUeIuICEkBy7Isi4gI4TAMg4hS3/f9BTwYhmHIsizP83wJCAkhhBBCCCF0uVz+ABmG4fF4fO5ut2s6nU4mHMeRMAzDMAyD4zjO83wcx3EcB0KIz+cPhBAIIYSQ0G63ezKZzOfzOQDgOI4jIYSQIAzDMIQQQgiBEMK3bdsQQgghhBBCCCGEEEIIIZSfn38B5q2XgRBCiHa7fcjlcgEA4gT+4gT+4gQAAAABJRU5ErkJggg==">
 </head>
 
-<body>
-    <!-- Partículas animadas -->
-    <div class="particles" id="particles"></div>
+<script>
+    // Configuração da API do backend
+    const API_BASE_URL = 'https://api.outzapp.com';
 
-    <!-- Header -->
-    <header class="header">
-        <div class="header-logo">
-            <div class="titan-text">TITAN</div>
-        </div>
-        <div class="header-actions">
-            <button class="header-feedback-btn" onclick="openFeedbackModal()" title="Reportar Problema">
-                 Feedback
+    // Função helper para todas as chamadas
+    function fetchAPI(endpoint, options = {}) {
+        const url = `${API_BASE_URL}${endpoint}`;
+        const defaultHeaders = {
+            // 'Content-Type': 'application/json', // Removido daqui
+            // ...options.headers
+        };
+
+        // Adicionar Content-Type apenas se houver body e for um método que o usa
+        if (options.body && (options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH')) {
+            defaultHeaders['Content-Type'] = 'application/json';
+        }
+
+        return fetch(url, {
+            ...options,
+            headers: {
+                ...defaultHeaders,
+                ...options.headers // Mesclar com headers passados explicitamente
+            }
+        });
+    }
+</script>
+
+<body>
+    <!-- ✅ SIDEBAR MENU SIMPLIFICADO -->
+    <div class="claude-sidebar" id="claudeSidebar">
+        <div class="sidebar-header">
+            <button class="sidebar-toggle" onclick="toggleClaudeSidebar()">
+                <span class="hamburger">☰</span>
             </button>
-            <div class="status-indicator">
-                <div class="status-dot"></div>
-                <span>Online • 1/5</span>
+            <div class="sidebar-logo">
+                <span class="logo-text">Titan</span>
             </div>
         </div>
-    </header>
+
+        <!-- Botão Nova Conversa -->
+        <div class="sidebar-new-chat">
+            <button class="new-chat-btn" onclick="startNewChat()">
+                <span class="btn-icon">➕</span>
+                <span class="btn-text">Novo bate-papo</span>
+            </button>
+        </div>
+
+        <!-- Lista de Conversas Recentes -->
+        <div class="sidebar-recents">
+            <div class="recents-header">Recentes</div>
+            <div class="recents-list" id="recentsList">
+                <!-- Conversas serão carregadas aqui via JavaScript -->
+            </div>
+        </div>
+
+        <!-- Footer com informações do Titan -->
+        <div class="sidebar-footer">
+            <div class="user-info" onclick="showTitanInfo()">
+                <div class="user-avatar">ℹ️</div>
+                <div class="user-details">
+                    <div class="user-name">Titan AI</div>
+                    <div class="user-plan">Informações do sistema</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay para fechar clicando fora -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeClaudeSidebar()"></div>
+
+    <!-- Botão hamburger fixo (quando sidebar fechada) -->
+    <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleClaudeSidebar()">
+        ☰
+    </button>
+
+    <!-- Partículas animadas -->
+    <div class="particles" id="particles"></div>
 
     <!-- Welcome Container -->
     <main class="welcome-container">
         <div class="welcome-message">
             <p class="welcome-text">
-                Olá! Sou o <strong>Titan</strong> com <strong>memória avançada</strong> e ferramentas poderosas!
+                <strong>Como posso ajudar?</strong>
             </p>
         </div>
 
@@ -47,9 +105,45 @@
             <div class="main-input-container">
                 <textarea class="main-input" id="mainInput" placeholder="Oi titan tudo bem?" rows="1" autocomplete="off"
                     autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
-                <button class="settings-btn" onclick="toggleSettingsTab()" title="Ferramentas (Ctrl+.)">
-                    <span>...</span>
-                </button>
+
+                <!-- ✅ NOVO: Dropdown de configurações -->
+                <div class="config-dropdown" id="configDropdown">
+                    <button class="config-btn" onclick="toggleConfigDropdown()">
+                        <svg class="config-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <circle cx="12" cy="5" r="2" />
+                            <circle cx="12" cy="12" r="2" />
+                            <circle cx="12" cy="19" r="2" />
+                        </svg>
+                    </button>
+                    <div class="dropdown-content" id="dropdownContent">
+                        <div class="dropdown-section">
+                            <div class="dropdown-item" onclick="toggleThinkingFromDropdown()">
+                                <span class="dropdown-text">Pensamento prolongado</span>
+                                <div class="dropdown-toggle" id="dropdownThinkingToggle">
+                                    <div class="toggle-switch"></div>
+                                </div>
+
+                                <div class="tooltip">
+                                    <div class="tooltip-header">
+                                        <img src="/static/images/thinking-mode-banner.png"
+                                            alt="Modo Pensamento Prolongado" class="tooltip-banner">
+                                    </div>
+                                    <div class="tooltip-content">
+                                        Permite que Titan pense em voz alta por mais tempo para perguntas e desafios
+                                        mais complexos.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dropdown-section">
+                            <div class="dropdown-item" onclick="openFeedbackModal(); closeConfigDropdown();">
+                                <span class="dropdown-text">Enviar feedback</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <button class="send-btn" id="sendBtn">
                     <svg viewBox="0 0 24 24">
                         <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
@@ -81,9 +175,45 @@
             <div class="chat-input-container">
                 <textarea id="chatInput" placeholder="Continue conversando com o Titan..." rows="1" autocomplete="off"
                     autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
-                <button class="settings-btn" onclick="toggleSettingsTab()" title="Ferramentas (Ctrl+.)">
-                    <span>...</span>
-                </button>
+
+                <!-- ✅ DROPDOWN TAMBÉM NO CHAT -->
+                <div class="config-dropdown" id="configDropdownChat">
+                    <button class="config-btn" onclick="toggleConfigDropdownChat()">
+                        <svg class="config-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <circle cx="12" cy="5" r="2" />
+                            <circle cx="12" cy="12" r="2" />
+                            <circle cx="12" cy="19" r="2" />
+                        </svg>
+                    </button>
+                    <div class="dropdown-content" id="dropdownContentChat">
+                        <div class="dropdown-section">
+                            <div class="dropdown-item" onclick="toggleThinkingFromDropdown()">
+                                <span class="dropdown-text">Pensamento prolongado</span>
+                                <div class="dropdown-toggle" id="dropdownThinkingToggleChat">
+                                    <div class="toggle-switch"></div>
+                                </div>
+
+                                <div class="tooltip">
+                                    <div class="tooltip-header">
+                                        <img src="/static/images/thinking-mode-banner.png"
+                                            alt="Modo Pensamento Prolongado" class="tooltip-banner">
+                                    </div>
+                                    <div class="tooltip-content">
+                                        Permite que Titan pense em voz alta por mais tempo para perguntas e desafios
+                                        mais complexos.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dropdown-section">
+                            <div class="dropdown-item" onclick="openFeedbackModal(); closeConfigDropdownChat();">
+                                <span class="dropdown-text">Enviar feedback</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <button class="send-btn" id="chatSendBtn">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
@@ -99,73 +229,94 @@
         <span id="thinkingText">Titan está pensando...</span>
     </div>
 
-    <!-- Aba de Ferramentas -->
-    <div class="settings-tab" id="settingsTab">
-        <div class="settings-handle" onclick="toggleSettingsTab()">
-            <span class="settings-icon"></span>
-        </div>
-        <button class="close-btn" onclick="toggleSettingsTab()" title="Fechar">×</button>
-
-        <div class="settings-content">
-            <!-- Thinking Toggle -->
-            <div class="thinking-setting" onclick="toggleThinkingClean()">
-                <div class="thinking-info">
-                    <div class="thinking-icon-wrapper">
-                        <span id="thinkingModeIcon">🧠</span>
-                    </div>
-                    <div class="thinking-details">
-                        <h4 id="thinkingModeTitle">Pensamento prolongado</h4>
+    <!-- Modal de Informações do Titan -->
+    <div class="modal titan-info-modal" id="titanInfoModal" style="display: none;">
+        <div class="modal-content titan-info-content">
+            <!-- Header com gradiente -->
+            <div class="titan-info-header">
+                <div class="titan-info-logo">
+                    <div class="titan-info-title">
+                        <h2>Titan AI</h2>
                     </div>
                 </div>
-                <div class="titan-toggle" id="titanToggle"></div>
-            </div> <!-- Conversas -->
-            <div class="section-title">Conversas</div>
-            <button class="titan-btn" onclick="toggleHistorySidebar()">
-                Ver Histórico
-            </button>
-            <button class="titan-btn" onclick="startNewChat()">
-                Nova Conversa
-            </button>
-        </div>
-    </div>
+            </div>
 
-    <!-- Histórico Sidebar -->
-    <div class="history-sidebar" id="historySidebar">
-        <div class="sidebar-header">
-            <h3>Histórico de Conversas</h3>
-            <div class="sidebar-controls">
-                <button class="sidebar-btn" onclick="startNewChat()" title="Nova Conversa">+</button>
-                <button class="sidebar-btn" onclick="toggleHistorySidebar()" title="Fechar">×</button>
+            <!-- Informações em cards -->
+            <div class="titan-info-body">
+                <div class="info-cards">
+                    <div class="info-card">
+                        <div class="info-icon">🚀</div>
+                        <div class="info-details">
+                            <strong>Versão</strong>
+                            <span>1.0 Beta</span>
+                        </div>
+                    </div>
+
+                    <div class="info-card">
+                        <div class="info-icon">🧠</div>
+                        <div class="info-details">
+                            <strong>Modelo</strong>
+                            <span>Saturno</span>
+                        </div>
+                    </div>
+
+                    <div class="info-card">
+                        <div class="info-icon">🟢</div>
+                        <div class="info-details">
+                            <strong>Status</strong>
+                            <span>Online</span>
+                        </div>
+                    </div>
+
+                    <div class="info-card">
+                        <div class="info-icon" id="modeIcon">⚡</div>
+                        <div class="info-details">
+                            <strong>Modo Atual</strong>
+                            <span id="modeText">Resposta Direta</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recursos -->
+                <div class="titan-features">
+                    <h4>Recursos em Teste</h4>
+                    <div class="features-grid">
+                        <div class="feature-item">
+                            <span class="feature-icon">💾</span>
+                            <span>Memória Persistente (Beta)</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">🌐</span>
+                            <span>Busca na Internet (Beta)</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">🧠</span>
+                            <span>Modo Raciocínio</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">💬</span>
+                            <span>Chat Streaming</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Descrição -->
+                <div class="titan-description">
+                    <p>Saturno é um assistente de IA de última geração, equipado com memória avançada, capacidade de
+                        raciocínio complexo e ferramentas integradas para oferecer uma experiência de conversação
+                        única e personalizada.</p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="titan-info-footer">
+                <button class="btn-modern btn-primary" onclick="closeTitanInfo()">
+                    <span>Continuar Conversando</span>
+                    <span class="btn-arrow">→</span>
+                </button>
             </div>
         </div>
-
-        <div class="sidebar-search">
-            <input type="text" id="historySearch" placeholder="🔍 Buscar conversas..." autocomplete="off"
-                autocapitalize="off" autocorrect="off" spellcheck="false">
-        </div>
-
-        <div class="sidebar-filters">
-            <button class="filter-btn active" data-filter="all">Todas</button>
-            <button class="filter-btn" data-filter="pinned">Fixadas</button>
-            <button class="filter-btn" data-filter="recent">Recentes</button>
-        </div>
-
-        <div class="sidebar-content" id="historyList">
-            <!-- Conversas carregadas via JavaScript -->
-        </div>
-
-        <div class="sidebar-footer">
-            <button class="sidebar-btn-full" onclick="exportAllChats()">
-                Exportar Todas
-            </button>
-            <button class="sidebar-btn-full danger" onclick="clearAllHistory()">
-                Limpar Histórico
-            </button>
-        </div>
     </div>
-
-    <!-- Overlay do Histórico -->
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleHistorySidebar()"></div>
 
     <!-- Modal de Feedback -->
     <div class="modal feedback-modal" id="feedbackModal" style="display: none;">
@@ -173,33 +324,32 @@
             <div class="feedback-header">
                 <div class="feedback-icon" id="feedbackIcon"></div>
                 <h2 id="feedbackTitle">Enviar Feedback</h2>
-                <button class="close-btn" onclick="closeFeedbackModal()">×</button>
             </div>
 
             <div class="feedback-body" id="feedbackBody">
                 <form id="feedbackForm">
-                    <!--  CSRF TOKEN NO FORM -->
+                    <!-- ✅ CSRF TOKEN NO FORM -->
                     <input type="hidden" id="feedbackCsrfToken" name="csrf_token" value="">
                     <input type="hidden" id="feedbackType" name="tipo" value="geral">
 
                     <div class="feedback-type-selection">
-                        <h3> Que tipo de feedback você quer enviar?</h3>
+                        <h3>🎯 Que tipo de feedback você quer enviar?</h3>
                         <div class="feedback-types-inline">
                             <button type="button" class="feedback-type-btn" data-type="bug"
                                 onclick="selectFeedbackType('bug')">
-                                Bug/Erro
+                                🐛 Bug/Erro
                             </button>
                             <button type="button" class="feedback-type-btn" data-type="melhoria"
                                 onclick="selectFeedbackType('melhoria')">
-                                Sugestão
+                                💡 Sugestão
                             </button>
                             <button type="button" class="feedback-type-btn" data-type="problema"
                                 onclick="selectFeedbackType('problema')">
-                                Problema
+                                ⚠️ Problema
                             </button>
                             <button type="button" class="feedback-type-btn" data-type="resposta"
                                 onclick="selectFeedbackType('resposta')">
-                                Resposta Incorreta
+                                🤖 Resposta Incorreta
                             </button>
                         </div>
                     </div>
@@ -230,7 +380,7 @@
                     </div>
 
                     <div class="system-info-compact">
-                        <h4>Informações coletadas automaticamente:</h4>
+                        <h4>📊 Informações coletadas automaticamente:</h4>
                         <p>Navegador, sistema, horário e modo atual do Titan</p>
                     </div>
                 </form>
@@ -248,9 +398,61 @@
         </div>
     </div>
 
+    <template id="message-actions-template">
+        <div class="message-actions">
+            <button class="action-btn regenerate-btn" data-tooltip="Regenerar resposta">
+                <div class="action-btn-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                        <path d="M16 16h5v5" />
+                    </svg>
+                </div>
+                <span class="action-btn-text">Regenerar</span>
+            </button>
+
+            <button class="action-btn like-btn" data-tooltip="Gostei desta resposta">
+                <div class="action-btn-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M7 10v12" />
+                        <path
+                            d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+                    </svg>
+                </div>
+                <span class="action-btn-text">Gostei</span>
+            </button>
+
+            <button class="action-btn dislike-btn" data-tooltip="Não gostei desta resposta">
+                <div class="action-btn-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 14V2" />
+                        <path
+                            d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
+                    </svg>
+                </div>
+                <span class="action-btn-text">Não gostei</span>
+            </button>
+
+            <button class="action-btn copy-btn" data-tooltip="Copiar resposta">
+                <div class="action-btn-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                    </svg>
+                </div>
+                <span class="action-btn-text">Copiar</span>
+            </button>
+        </div>
+    </template>
+
     <!-- Scripts -->
     <script src="/static/script.js"></script>
-    <script src="/static/history.js"></script>
     <script src="/static/feedback-inline.js"></script>
 </body>
+
 </html>
