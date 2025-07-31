@@ -1042,8 +1042,6 @@ async function validateSessionWithBackend() {
         console.warn('⚠️ Não foi possível validar sessão:', error.message);
     }
 }
-}
-
 
 function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
