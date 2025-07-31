@@ -9,11 +9,15 @@ from config import CHAT_HISTORY_FILE, BACKUPS_DIR, EXPORTS_DIR, MAX_BACKUPS
 class ChatManager:
     def __init__(self):
         self.base_history_dir = Path(CHAT_HISTORY_FILE).parent / "sessions"
-        # self.base_history_dir.mkdir(exist_ok=True) # Desabilitado para evitar criação automática
+        self.base_history_dir.mkdir(parents=True, exist_ok=True) # Habilitado para sistema de histórico
         
         # SEGURANÇA: Diretório base absoluto para validação
         self.safe_base_path = self.base_history_dir.resolve()
         print(f" ChatManager inicializado - Diretório SEGURO: {self.safe_base_path}")
+        
+        # Nova estrutura: arquivos individuais por chat
+        self.metadata_filename = "metadata.json"
+        self.chat_prefix = "chat_"
     
     def _validate_session_id(self, session_id):
         """CRÍTICO: Validação rigorosa de session_id"""
@@ -70,20 +74,20 @@ class ChatManager:
         print(f"Diretório seguro criado: {resolved_session_dir}")
         return resolved_session_dir
     
-    def _get_session_file(self, session_id):
-        """BLINDADO: Retorna arquivo específico da sessão"""
+    def _get_metadata_file(self, session_id):
+        """BLINDADO: Retorna arquivo de metadados da sessão"""
         try:
             # 1. Obter diretório seguro
             session_dir = self._get_safe_session_dir(session_id)
             
             # 2. Nome do arquivo fixo (não baseado em input do usuário)
-            safe_filename = "chats.json"
+            safe_filename = self.metadata_filename
             
             # 3. Construir caminho final
-            session_file = session_dir / safe_filename
+            metadata_file = session_dir / safe_filename
             
             # 4. Validação final de segurança
-            resolved_file = session_file.resolve()
+            resolved_file = metadata_file.resolve()
             
             # 5. Verificar se o arquivo está dentro do diretório da sessão
             try:
@@ -95,6 +99,39 @@ class ChatManager:
             
         except Exception as e:
             print(f" SECURITY ALERT: Tentativa de acesso inseguro - session_id: {session_id[:20]}...")
+            print(f" Erro: {str(e)}")
+            raise ValueError("Acesso negado por motivos de segurança")
+    
+    def _get_chat_file(self, session_id, chat_id):
+        """BLINDADO: Retorna arquivo específico de um chat"""
+        try:
+            # 1. Obter diretório seguro
+            session_dir = self._get_safe_session_dir(session_id)
+            
+            # 2. Sanitizar chat_id
+            safe_chat_id = self._sanitize_filename(str(chat_id))
+            if not safe_chat_id or len(safe_chat_id) > 50:
+                raise ValueError("chat_id inválido")
+            
+            # 3. Nome do arquivo com prefixo seguro
+            safe_filename = f"{self.chat_prefix}{safe_chat_id}.json"
+            
+            # 4. Construir caminho final
+            chat_file = session_dir / safe_filename
+            
+            # 5. Validação final de segurança
+            resolved_file = chat_file.resolve()
+            
+            # 6. Verificar se o arquivo está dentro do diretório da sessão
+            try:
+                resolved_file.relative_to(session_dir)
+            except ValueError:
+                raise ValueError("Tentativa de escapar do diretório da sessão")
+            
+            return resolved_file
+            
+        except Exception as e:
+            print(f" SECURITY ALERT: Tentativa de acesso inseguro - chat_id: {str(chat_id)[:20]}...")
             print(f" Erro: {str(e)}")
             raise ValueError("Acesso negado por motivos de segurança")
     
@@ -119,86 +156,144 @@ class ChatManager:
         
         return filename
     
+    def _load_metadata(self, session_id):
+        """Carregar metadados da sessão"""
+        try:
+            metadata_file = self._get_metadata_file(session_id)
+            
+            if metadata_file.exists():
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                
+                if not isinstance(metadata, dict):
+                    print(f" Metadados inválidos para sessão {session_id[:8]}...")
+                    return {'chats': [], 'last_updated': None}
+                
+                return metadata
+            
+            # Arquivo não existe, criar estrutura padrão
+            return {'chats': [], 'last_updated': None}
+            
+        except Exception as e:
+            print(f" Erro ao carregar metadados da sessão {session_id[:8]}...: {str(e)[:100]}")
+            return {'chats': [], 'last_updated': None}
+    
+    def _save_metadata(self, session_id, metadata):
+        """Salvar metadados da sessão"""
+        try:
+            metadata_file = self._get_metadata_file(session_id)
+            metadata['last_updated'] = datetime.now().isoformat()
+            
+            with open(metadata_file, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
+            
+            os.chmod(metadata_file, 0o600)
+            return True
+            
+        except Exception as e:
+            print(f" Erro ao salvar metadados da sessão {session_id[:8]}...: {str(e)[:100]}")
+            return False
+    
+    def _load_single_chat(self, session_id, chat_id):
+        """Carregar um chat específico"""
+        try:
+            chat_file = self._get_chat_file(session_id, chat_id)
+            
+            if chat_file.exists():
+                # Verificar tamanho do arquivo
+                file_size = chat_file.stat().st_size
+                if file_size > 5 * 1024 * 1024:  # 5MB máximo por chat
+                    print(f" Chat muito grande: {file_size} bytes")
+                    return None
+                
+                with open(chat_file, 'r', encoding='utf-8') as f:
+                    chat_data = json.load(f)
+                
+                if not isinstance(chat_data, dict):
+                    print(f" Estrutura inválida do chat {chat_id}")
+                    return None
+                
+                return chat_data
+            
+            return None
+            
+        except Exception as e:
+            print(f" Erro ao carregar chat {chat_id} da sessão {session_id[:8]}...: {str(e)[:100]}")
+            return None
+    
+    def _save_single_chat(self, session_id, chat_data):
+        """Salvar um chat específico"""
+        try:
+            chat_id = chat_data.get('id')
+            if not chat_id:
+                print(" Chat sem ID não pode ser salvo")
+                return False
+            
+            chat_file = self._get_chat_file(session_id, chat_id)
+            
+            # Criar backup se arquivo existe
+            if chat_file.exists():
+                backup_content = chat_file.read_text(encoding='utf-8')
+                backup_file = chat_file.with_suffix('.json.backup')
+                backup_file.write_text(backup_content, encoding='utf-8')
+            
+            with open(chat_file, 'w', encoding='utf-8') as f:
+                json.dump(chat_data, f, ensure_ascii=False, indent=2)
+            
+            os.chmod(chat_file, 0o600)
+            return True
+            
+        except Exception as e:
+            print(f" Erro ao salvar chat {chat_data.get('id', 'unknown')} da sessão {session_id[:8]}...: {str(e)[:100]}")
+            return False
+    
     def load_history(self, session_id=None):
-        """SEGURO: Carregar histórico APENAS da sessão específica"""
+        """SEGURO: Carregar histórico (metadados) da sessão específica"""
         if not session_id:
             return []
         
         try:
-            session_file = self._get_session_file(session_id)
+            # Verificar e executar auto-migração se necessário
+            migration_result = self.auto_migrate_if_needed(session_id)
+            if migration_result.get('status') == 'erro':
+                print(f" Erro na migração da sessão {session_id[:8]}...: {migration_result.get('message')}")
+            elif migration_result.get('migrated_count', 0) > 0:
+                print(f" ✅ Auto-migração concluída: {migration_result.get('migrated_count')} chats migrados")
             
-            if session_file.exists():
-                # Verificar tamanho do arquivo (proteção DoS)
-                file_size = session_file.stat().st_size
-                if file_size > 50 * 1024 * 1024:  # 50MB máximo
-                    print(f" Arquivo muito grande: {file_size} bytes")
-                    return []
-                
-                with open(session_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                # Validar estrutura dos dados
-                if not isinstance(data, list):
-                    print(f" Estrutura inválida do arquivo")
-                    return []
-                
-                # Limitar número de conversas (proteção memória)
-                if len(data) > 1000:
-                    print(f" Muitas conversas, limitando a 1000")
-                    data = data[:1000]
-                
-                print(f" Histórico carregado SEGURAMENTE da sessão {session_id[:8]}...: {len(data)} conversas")
-                return data
+            # Carregar metadados
+            metadata = self._load_metadata(session_id)
+            chats_info = metadata.get('chats', [])
             
-            print(f" Nenhum histórico para sessão {session_id[:8]}... - criando novo")
-            return []
+            if not chats_info:
+                print(f" Nenhum histórico para sessão {session_id[:8]}... - criando novo")
+                return []
+            
+            # Retornar apenas os metadados dos chats (não o conteúdo completo)
+            # Isso melhora drasticamente a performance
+            print(f" Histórico (metadados) carregado da sessão {session_id[:8]}...: {len(chats_info)} conversas")
+            return chats_info
             
         except Exception as e:
             print(f" Erro SEGURO ao carregar histórico da sessão {session_id[:8]}...: {str(e)[:100]}")
             return []
     
     def save_history(self, chat_history, session_id=None):
-        if not session_id:
-            print(" session_id é obrigatório para salvar histórico")
+        """DEPRECIADO: Use save_chat() para salvar chats individuais"""
+        print("⚠️  AVISO: save_history() está depreciado. Use save_chat() para cada conversa individual.")
+        
+        if not session_id or not isinstance(chat_history, list):
             return False
         
-        if not isinstance(chat_history, list):
-            print(" chat_history deve ser uma lista")
-            return False
+        # Migração temporária: salvar cada chat individualmente
+        success_count = 0
+        for chat in chat_history:
+            if isinstance(chat, dict) and chat.get('id'):
+                result = self.save_chat(chat)
+                if result.get('status') == 'sucesso':
+                    success_count += 1
         
-        if len(chat_history) > 1000:
-            print(" Muitas conversas, limitando a 1000")
-            chat_history = chat_history[:1000]
-        
-        try:
-            session_file = self._get_session_file(session_id)
-        
-            if session_file.exists():
-                self._create_backup(session_id)
-        
-            session_dir = session_file.parent
-            session_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Adicionar thinking ao chat_history se presente
-            updated_history = []
-            for chat in chat_history:
-                if isinstance(chat, dict) and 'messages' in chat:
-                    last_message = chat['messages'][-1] if chat['messages'] else {}
-                    if last_message.get('role') == 'assistant' and 'thinking' in last_message:
-                        chat['thinking'] = last_message['thinking']
-                updated_history.append(chat)
-        
-            with open(session_file, 'w', encoding='utf-8') as f:
-                json.dump(updated_history, f, ensure_ascii=False, indent=2)
-        
-            os.chmod(session_file, 0o600)
-        
-            print(f" Histórico salvo SEGURAMENTE para sessão {session_id[:8]}...: {len(updated_history)} conversas")
-            return True
-        
-        except Exception as e:
-            print(f" Erro SEGURO ao salvar histórico da sessão {session_id[:8]}...: {str(e)[:100]}")
-            return False
+        print(f" Migração: {success_count}/{len(chat_history)} chats salvos individualmente")
+        return success_count > 0
     
     def _get_safe_backup_dir(self, session_id):
         """Diretório seguro para backups"""
@@ -294,24 +389,35 @@ class ChatManager:
             print(" chat_id muito longo")
             return None
         
-        history = self.load_history(session_id=session_id)
-        
-        for chat in history:
-            if not isinstance(chat, dict):
-                continue
-                
-            if chat.get('id') == chat_id:
+        try:
+            # Verificar se o chat existe nos metadados primeiro
+            metadata = self._load_metadata(session_id)
+            chat_exists = any(chat.get('id') == chat_id for chat in metadata.get('chats', []))
+            
+            if not chat_exists:
+                print(f" Chat {chat_id[:20]} não encontrado nos metadados da sessão {session_id[:8]}...")
+                return None
+            
+            # Carregar o chat completo do arquivo individual
+            chat_data = self._load_single_chat(session_id, chat_id)
+            
+            if chat_data:
                 # Verificação DUPLA de segurança
-                if chat.get('session_id') != session_id:
+                if chat_data.get('session_id') != session_id:
                     print(f" ALERTA DE SEGURANÇA: Chat {chat_id[:20]} com session_id inconsistente!")
                     return None
-                return chat
-        
-        print(f" Chat {chat_id[:20]} não encontrado na sessão {session_id[:8]}...")
-        return None
+                print(f" Chat {chat_id[:20]} carregado da sessão {session_id[:8]}...")
+                return chat_data
+            
+            print(f" Chat {chat_id[:20]} não foi possível carregar da sessão {session_id[:8]}...")
+            return None
+            
+        except Exception as e:
+            print(f" Erro ao buscar chat {chat_id[:20]} da sessão {session_id[:8]}...: {str(e)[:100]}")
+            return None
     
     def save_chat(self, chat_data):
-        """SEGURO: Salvar conversa específica NA SESSÃO CORRETA"""
+        """SEGURO: Salvar conversa específica NA SESSÃO CORRETA (nova estrutura)"""
         session_id = chat_data.get('session_id') if isinstance(chat_data, dict) else None
         
         if not session_id:
@@ -336,50 +442,58 @@ class ChatManager:
             if len(chat_data['messages']) > 500:
                 chat_data['messages'] = chat_data['messages'][:500]
         
-        # Carregar histórico APENAS da sessão
-        history = self.load_history(session_id=session_id)
         chat_id = chat_data.get('id')
         
-        # Verificar se é atualização ou nova conversa
-        existing_index = next((i for i, chat in enumerate(history) 
-                              if isinstance(chat, dict) and chat.get('id') == chat_id), -1)
-        
-        if existing_index >= 0:
-            # Atualizar conversa existente
-            history[existing_index] = chat_data
-            action = 'atualizada'
-            print(f" Conversa atualizada SEGURAMENTE na sessão {session_id[:8]}...: {chat_data.get('title', 'Sem título')[:30]}")
-        else:
-            # Nova conversa
-            history.insert(0, chat_data)
-            action = 'criada'
-            print(f" Nova conversa criada SEGURAMENTE na sessão {session_id[:8]}...: {chat_data.get('title', 'Sem título')[:30]}")
-        
-        # Salvar SEM backup automático
         try:
-            session_file = self._get_session_file(session_id)
+            # 1. Carregar metadados existentes
+            metadata = self._load_metadata(session_id)
+            chats_info = metadata.get('chats', [])
             
-            # Criar backup manual antes de salvar
-            if session_file.exists():
-                backup_content = session_file.read_text(encoding='utf-8')
-                backup_file = session_file.with_suffix('.json.backup')
-                backup_file.write_text(backup_content, encoding='utf-8')
+            # 2. Verificar se é atualização ou nova conversa
+            existing_index = next((i for i, chat in enumerate(chats_info) 
+                                  if isinstance(chat, dict) and chat.get('id') == chat_id), -1)
             
-            with open(session_file, 'w', encoding='utf-8') as f:
-                json.dump(history, f, ensure_ascii=False, indent=2)
+            # 3. Preparar metadados do chat (sem conteúdo das mensagens)
+            chat_metadata = {
+                'id': chat_data.get('id'),
+                'title': chat_data.get('title'),
+                'session_id': session_id,
+                'created_at': chat_data.get('created_at'),
+                'updated_at': datetime.now().isoformat(),
+                'message_count': len(chat_data.get('messages', [])),
+                'thinking': chat_data.get('thinking', False),
+                'pinned': chat_data.get('pinned', False)
+            }
             
-            # Permissões seguras
-            os.chmod(session_file, 0o600)
+            if existing_index >= 0:
+                # Atualizar conversa existente nos metadados
+                chats_info[existing_index] = chat_metadata
+                action = 'atualizada'
+                print(f" Conversa atualizada SEGURAMENTE na sessão {session_id[:8]}...: {chat_data.get('title', 'Sem título')[:30]}")
+            else:
+                # Nova conversa - adicionar ao início
+                chats_info.insert(0, chat_metadata)
+                action = 'criada'
+                print(f" Nova conversa criada SEGURAMENTE na sessão {session_id[:8]}...: {chat_data.get('title', 'Sem título')[:30]}")
             
-            print(f" Histórico salvo SEGURAMENTE para sessão {session_id[:8]}... SEM backup: {len(history)} conversas")
+            # 4. Salvar o chat individual
+            if not self._save_single_chat(session_id, chat_data):
+                return {'status': 'erro', 'message': 'Erro ao salvar chat individual'}
+            
+            # 5. Atualizar metadados
+            metadata['chats'] = chats_info
+            if not self._save_metadata(session_id, metadata):
+                return {'status': 'erro', 'message': 'Erro ao salvar metadados'}
+            
+            print(f" Chat e metadados salvos para sessão {session_id[:8]}...: {len(chats_info)} conversas")
             return {'status': 'sucesso', 'action': action, 'chat_id': chat_id}
         
         except Exception as e:
-            print(f" Erro SEGURO ao salvar histórico da sessão {session_id[:8]}...: {str(e)[:100]}")
+            print(f" Erro SEGURO ao salvar chat da sessão {session_id[:8]}...: {str(e)[:100]}")
             return {'status': 'erro', 'message': 'Erro ao salvar'}
     
     def delete_chat(self, chat_id, session_id=None):
-        """SEGURO: Excluir chat APENAS da sessão específica"""
+        """SEGURO: Excluir chat APENAS da sessão específica (nova estrutura)"""
         if not session_id:
             print(" session_id é obrigatório para deletar chat")
             return {'status': 'erro', 'message': 'session_id é obrigatório'}
@@ -388,33 +502,58 @@ class ChatManager:
             print(" chat_id inválido")
             return {'status': 'erro', 'message': 'chat_id inválido'}
         
-        # Carregar histórico APENAS da sessão
-        history = self.load_history(session_id=session_id)
-        
-        # Encontrar e remover o chat com validação DUPLA
-        chat_to_delete = None
-        history_filtered = []
-        
-        for chat in history:
-            if not isinstance(chat, dict):
-                continue
-                
-            if chat.get('id') == chat_id:
-                # Verificação DUPLA de segurança
-                if chat.get('session_id') != session_id:
-                    print(f" ALERTA DE SEGURANÇA: Tentativa de deletar chat de outra sessão!")
-                    return {'status': 'erro', 'message': 'Chat não encontrado ou sem permissão'}
-                chat_to_delete = chat
-            else:
-                history_filtered.append(chat)
-        
-        if chat_to_delete:
-            if self.save_history(history_filtered, session_id=session_id):
-                print(f"Conversa excluída SEGURAMENTE da sessão {session_id[:8]}...: {chat_to_delete.get('title', 'Sem título')[:30]}")
-                return {'status': 'sucesso', 'message': 'Conversa excluída'}
-            return {'status': 'erro', 'message': 'Falha ao salvar após exclusão'}
-        
-        return {'status': 'erro', 'message': 'Conversa não encontrada'}
+        try:
+            # 1. Carregar metadados
+            metadata = self._load_metadata(session_id)
+            chats_info = metadata.get('chats', [])
+            
+            # 2. Encontrar o chat nos metadados
+            chat_to_delete = None
+            filtered_chats = []
+            
+            for chat in chats_info:
+                if not isinstance(chat, dict):
+                    continue
+                    
+                if chat.get('id') == chat_id:
+                    # Verificação DUPLA de segurança
+                    if chat.get('session_id') != session_id:
+                        print(f" ALERTA DE SEGURANÇA: Tentativa de deletar chat de outra sessão!")
+                        return {'status': 'erro', 'message': 'Chat não encontrado ou sem permissão'}
+                    chat_to_delete = chat
+                else:
+                    filtered_chats.append(chat)
+            
+            if not chat_to_delete:
+                return {'status': 'erro', 'message': 'Conversa não encontrada'}
+            
+            # 3. Remover arquivo individual do chat
+            try:
+                chat_file = self._get_chat_file(session_id, chat_id)
+                if chat_file.exists():
+                    # Criar backup antes de deletar
+                    backup_content = chat_file.read_text(encoding='utf-8')
+                    backup_file = chat_file.with_suffix('.json.deleted')
+                    backup_file.write_text(backup_content, encoding='utf-8')
+                    
+                    # Deletar arquivo original
+                    chat_file.unlink()
+                    print(f" Arquivo do chat {chat_id[:20]} removido da sessão {session_id[:8]}...")
+            except Exception as e:
+                print(f" Erro ao remover arquivo do chat: {str(e)[:100]}")
+                return {'status': 'erro', 'message': 'Erro ao remover arquivo do chat'}
+            
+            # 4. Atualizar metadados
+            metadata['chats'] = filtered_chats
+            if not self._save_metadata(session_id, metadata):
+                return {'status': 'erro', 'message': 'Erro ao salvar metadados'}
+            
+            print(f"Conversa excluída SEGURAMENTE da sessão {session_id[:8]}...: {chat_to_delete.get('title', 'Sem título')[:30]}")
+            return {'status': 'sucesso', 'message': 'Conversa excluída'}
+            
+        except Exception as e:
+            print(f" Erro SEGURO ao deletar chat da sessão {session_id[:8]}...: {str(e)[:100]}")
+            return {'status': 'erro', 'message': 'Erro ao deletar'}
     
     def export_chat(self, chat_id, session_id=None):
         """SEGURO: Exportar conversa específica DA SESSÃO"""
@@ -560,6 +699,96 @@ class ChatManager:
         except Exception as e:
             print(f" Erro SEGURO ao obter estatísticas da sessão {session_id[:8]}...: {str(e)[:100]}")
             return {'status': 'erro', 'message': 'Erro ao obter estatísticas'}
+    
+    def migrate_legacy_chats(self, session_id):
+        """Migrar chats da estrutura antiga (chats.json) para nova estrutura (arquivos individuais)"""
+        try:
+            # 1. Verificar se existe arquivo legacy
+            session_dir = self._get_safe_session_dir(session_id)
+            legacy_file = session_dir / "chats.json"
+            
+            if not legacy_file.exists():
+                print(f" Nenhum arquivo legacy encontrado para sessão {session_id[:8]}...")
+                return {'status': 'sucesso', 'message': 'Nenhuma migração necessária'}
+            
+            # 2. Carregar dados legacy
+            with open(legacy_file, 'r', encoding='utf-8') as f:
+                legacy_chats = json.load(f)
+            
+            if not isinstance(legacy_chats, list):
+                print(f" Estrutura legacy inválida para sessão {session_id[:8]}...")
+                return {'status': 'erro', 'message': 'Estrutura legacy inválida'}
+            
+            # 3. Migrar cada chat para arquivo individual
+            migrated_count = 0
+            metadata_chats = []
+            
+            for chat in legacy_chats:
+                if not isinstance(chat, dict) or not chat.get('id'):
+                    continue
+                
+                try:
+                    # Garantir que o chat tem session_id
+                    chat['session_id'] = session_id
+                    
+                    # Salvar chat individual
+                    if self._save_single_chat(session_id, chat):
+                        # Criar metadados
+                        chat_metadata = {
+                            'id': chat.get('id'),
+                            'title': chat.get('title', 'Chat Migrado'),
+                            'session_id': session_id,
+                            'created_at': chat.get('created_at'),
+                            'updated_at': datetime.now().isoformat(),
+                            'message_count': len(chat.get('messages', [])),
+                            'thinking': chat.get('thinking', False),
+                            'pinned': chat.get('pinned', False)
+                        }
+                        metadata_chats.append(chat_metadata)
+                        migrated_count += 1
+                
+                except Exception as e:
+                    print(f" Erro ao migrar chat {chat.get('id', 'unknown')}: {str(e)[:100]}")
+                    continue
+            
+            # 4. Salvar metadados
+            metadata = {'chats': metadata_chats}
+            if not self._save_metadata(session_id, metadata):
+                return {'status': 'erro', 'message': 'Erro ao salvar metadados'}
+            
+            # 5. Fazer backup do arquivo legacy
+            backup_file = legacy_file.with_suffix('.json.migrated')
+            legacy_file.rename(backup_file)
+            
+            print(f" Migração concluída para sessão {session_id[:8]}...: {migrated_count} chats")
+            return {
+                'status': 'sucesso', 
+                'message': f'Migração concluída: {migrated_count} chats',
+                'migrated_count': migrated_count,
+                'backup_file': str(backup_file)
+            }
+        
+        except Exception as e:
+            print(f" Erro na migração da sessão {session_id[:8]}...: {str(e)[:100]}")
+            return {'status': 'erro', 'message': f'Erro na migração: {str(e)[:100]}'}
+    
+    def auto_migrate_if_needed(self, session_id):
+        """Verificar e migrar automaticamente se necessário"""
+        try:
+            session_dir = self._get_safe_session_dir(session_id)
+            legacy_file = session_dir / "chats.json"
+            metadata_file = self._get_metadata_file(session_id)
+            
+            # Se existe legacy e não existe metadata, migrar
+            if legacy_file.exists() and not metadata_file.exists():
+                print(f" Auto-migração detectada para sessão {session_id[:8]}...")
+                return self.migrate_legacy_chats(session_id)
+            
+            return {'status': 'sucesso', 'message': 'Nenhuma migração necessária'}
+        
+        except Exception as e:
+            print(f" Erro na auto-migração da sessão {session_id[:8]}...: {str(e)[:100]}")
+            return {'status': 'erro', 'message': 'Erro na verificação de migração'}
 
 # Instância global SEGURA
 chat_manager = ChatManager()

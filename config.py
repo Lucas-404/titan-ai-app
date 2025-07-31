@@ -20,7 +20,7 @@ MAX_BACKUPS = 10
 AUTO_BACKUP = True
 
 # Configurações de sessão - CORRIGIDAS
-MAX_USUARIOS_SIMULTANEOS = 5
+MAX_USUARIOS_SIMULTANEOS = 50
 TIMEOUT_SESSAO = 3600  #  MUDANÇA: 1 hora ao invés de 30 minutos
 TEMPO_RESPOSTA_ESTIMADO = 6  # segundos
 CLEANUP_INTERVAL = 300  #  MUDANÇA: 5 minutos ao invés de 1 minuto

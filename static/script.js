@@ -11,10 +11,36 @@ let isInChatMode = false;
 let systemStatus = 'connecting';
 let settingsTabVisible = false;
 
-// Variáveis de sessão
-let sessionId = null;
-let conversationHistory = [];
-let isNewSession = true;
+// Variáveis de sessão - globais para acesso do history.js
+window.sessionId = null;
+window.conversationHistory = [];
+window.isNewSession = true;
+
+// Funções helper para sincronizar variáveis
+function setSessionId(id) {
+    window.sessionId = id;
+    sessionId = id;
+}
+
+function addToConversationHistory(message) {
+    window.conversationHistory.push(message);
+    conversationHistory = window.conversationHistory;
+}
+
+function clearConversationHistory() {
+    window.conversationHistory = [];
+    conversationHistory = window.conversationHistory;
+}
+
+function setConversationHistory(history) {
+    window.conversationHistory = history || [];
+    conversationHistory = window.conversationHistory;
+}
+
+// Aliases locais para compatibilidade
+let sessionId = window.sessionId;
+let conversationHistory = window.conversationHistory;
+let isNewSession = window.isNewSession;
 
 // Variáveis de controle
 let currentRequest = null;
@@ -95,6 +121,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (mainInput) { mainInput.disabled = false; mainInput.placeholder = 'Pergunte ao Titan'; mainInput.focus(); }
         initializeCleanWelcome();
         initializeOriginalSystem();
+        
+        // 🆕 EMERGENCY: Configurar auto-save de emergência
+        setupEmergencyAutoSave();
     } catch (error) {
         console.error('Falha crítica na inicialização da sessão:', error);
         if (mainInput) mainInput.placeholder = 'Erro de conexão. Tente recarregar a página.';
@@ -215,6 +244,7 @@ function setupEventListeners() {
     const toggleBtn = document.getElementById('titanToggle');
     if (toggleBtn) toggleBtn.addEventListener('click', toggleThinkingClean);
     setupChatInputListeners();
+    setupHistorySidebarListeners(); // 🆕 Configurar sidebar
     window.addEventListener('resize', handleWindowResize);
     setInterval(updateSystemStatus, 180000);
     console.log(' Event listeners configurados (protegidos contra duplicação)');
@@ -228,6 +258,24 @@ function setupChatInputListeners() {
         chatInput.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px'; });
     }
     if (chatSendBtn) chatSendBtn.addEventListener('click', sendChatMessage);
+}
+
+// 🆕 CONFIGURAR SIDEBAR DE HISTÓRICO
+function setupHistorySidebarListeners() {
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', () => {
+            console.log('🔘 Botão sidebar clicado');
+            if (window.toggleHistorySidebar && typeof window.toggleHistorySidebar === 'function') {
+                window.toggleHistorySidebar();
+            } else {
+                console.warn('⚠️ Função toggleHistorySidebar não disponível - history.js pode não ter carregado');
+            }
+        });
+        console.log('✅ Sidebar toggle configurado');
+    } else {
+        console.warn('⚠️ Botão sidebarToggle não encontrado no DOM');
+    }
 }
 
 function handleMainInputKeydown(e) {
@@ -260,11 +308,36 @@ async function handleSendMessage() {
     if (!message) return;
     console.log('📤 Enviando mensagem:', message);
     const finalMessage = addThinkingCommand(message);
+    
+    // 🆕 SALVAMENTO ANTECIPADO: Garantir sessão válida antes
+    if (!sessionId || !window.sessionId) {
+        console.log('🔄 Sessão não encontrada - inicializando...');
+        const sessionInitialized = await initializeUserSession();
+        if (!sessionInitialized) {
+            console.error('❌ Falha crítica na inicialização da sessão');
+            showToast('Erro de sessão. Tente recarregar a página.', 'error');
+            return;
+        }
+    }
+    
+    // 1. Adicionar mensagem do usuário ao histórico
+    addToConversationHistory({
+        role: 'user',
+        content: message,
+        timestamp: new Date().toISOString()
+    });
+    
+    // 2. Criar e salvar chat imediatamente
+    await createChatEarly(message);
+    
     if (!isInChatMode) {
         transitionToChat();
-        setTimeout(() => { addMessageToChat(message, true); sendMessageToServer(finalMessage); }, 350);
+        setTimeout(() => { 
+            addMessageToChatVisual(message, true); 
+            sendMessageToServer(finalMessage); 
+        }, 350);
     } else {
-        addMessageToChat(message, true);
+        addMessageToChatVisual(message, true);
         await sendMessageToServer(finalMessage);
     }
     mainInput.value = '';
@@ -273,7 +346,18 @@ async function handleSendMessage() {
 
 async function sendMessageToServer(message) {
     if (!validateInput(message)) return;
-    if (!sessionId) startNewSession();
+    
+    // Garantir sessão válida antes de enviar
+    if (!sessionId || !window.sessionId) {
+        console.log('🔄 Sessão não encontrada - inicializando antes do envio...');
+        const sessionInitialized = await initializeUserSession();
+        if (!sessionInitialized) {
+            console.error('❌ Falha na inicialização da sessão para envio');
+            showError('Erro de sessão. Tente recarregar a página.');
+            return;
+        }
+    }
+    
     currentRequest = new AbortController();
     updateSendButtonState(true);
     if (thinking) { thinking.style.display = 'block'; thinkingText.textContent = ''; }
@@ -315,7 +399,31 @@ async function sendChatMessage() {
     if (!message) return;
     const finalMessage = addThinkingCommand(message);
     console.log('📤 Enviando do chat:', finalMessage);
-    addMessageToChat(message, true);
+    
+    // 🆕 SALVAMENTO ANTECIPADO: Garantir sessão válida antes
+    if (!sessionId || !window.sessionId) {
+        console.log('🔄 Sessão não encontrada - inicializando...');
+        const sessionInitialized = await initializeUserSession();
+        if (!sessionInitialized) {
+            console.error('❌ Falha crítica na inicialização da sessão');
+            showToast('Erro de sessão. Tente recarregar a página.', 'error');
+            return;
+        }
+    }
+    
+    // 1. Adicionar mensagem do usuário ao histórico
+    addToConversationHistory({
+        role: 'user',
+        content: message,
+        timestamp: new Date().toISOString()
+    });
+    
+    // 2. Criar e salvar chat imediatamente
+    await createChatEarly(message);
+    
+    // 3. Adicionar mensagem ao chat visual (sem adicionar ao histórico novamente)
+    addMessageToChatVisual(message, true);
+    
     chatInput.value = '';
     chatInput.style.height = 'auto';
     await sendMessageToServer(finalMessage);
@@ -323,16 +431,23 @@ async function sendChatMessage() {
 
 async function processStreamResponse(response, container) {
     console.log(' [STREAM] Processando resposta...');
+    
+    // 🆕 SYNC: Garantir que session_id esteja sincronizado
+    await ensureSessionSync();
+    
     const reader = response.body.getReader();
     let fullContent = '';
     let thinkingContent = '';
     let chunks = 0;
+    let streamCompleted = false;
+    
     while (true) {
         const { done, value } = await reader.read();
         if (done) { console.log(' [STREAM] Stream completo'); break; }
         const chunk = new TextDecoder().decode(value);
         const lines = chunk.split('\n');
         chunks++;
+        
         for (const line of lines) {
             if (line.startsWith('data: ')) {
                 try {
@@ -353,9 +468,19 @@ async function processStreamResponse(response, container) {
                     }
                     if (data.type === 'thinking_done' && data.thinking) { thinkingContent = data.thinking; console.log(' [STREAM] Thinking recebido:', thinkingContent.length, 'chars'); }
                     if (data.type === 'error') { showError(data.error); streamContainer.remove(); return; }
-                    if (data.type === 'done') { console.log('🏁 [STREAM] Done recebido'); finalizeStreamingMessage(container, fullContent, thinkingContent); return; }
+                    if (data.type === 'done') { 
+                        console.log('🏁 [STREAM] Done recebido'); 
+                        finalizeStreamingMessage(container, fullContent, thinkingContent);
+                        streamCompleted = true;
+                        break; // Sair do loop for
+                    }
                 } catch (e) { console.warn(' [STREAM] Erro no parse:', e); }
             }
+        }
+        
+        // Se recebemos 'done', sair do loop while também
+        if (streamCompleted) {
+            break;
         }
     }
     finalizeStreamingMessage(container, fullContent, thinkingContent);
@@ -467,6 +592,17 @@ function finalizeStreamingMessage(container, content, thinking = null) {
             assistantDiv.innerHTML = `<div class="message-content">${formatMessage(cleanContent)}</div>`;
         }
         console.log(' Thinking adicionado à mensagem!');
+        
+        // Adicionar mensagem da IA ao histórico (caso com thinking)
+        const assistantMessage = {
+            role: 'assistant',
+            content: cleanContent,
+            thinking: thinking,
+            timestamp: new Date().toISOString()
+        };
+        addToConversationHistory(assistantMessage);
+        console.log('🧠 Mensagem da IA com thinking adicionada ao histórico');
+        
     } else {
         const contentDiv = container.querySelector('.streaming-content');
         if (contentDiv) { 
@@ -474,9 +610,166 @@ function finalizeStreamingMessage(container, content, thinking = null) {
             contentDiv.innerHTML = formatMessage(cleanContent); 
             contentDiv.classList.remove('streaming-content'); 
         }
+        
+        // Adicionar mensagem da IA ao histórico (caso sem thinking)
+        const finalContent = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        const assistantMessage = {
+            role: 'assistant',
+            content: finalContent,
+            timestamp: new Date().toISOString()
+        };
+        addToConversationHistory(assistantMessage);
+        console.log('⚡ Mensagem da IA sem thinking adicionada ao histórico');
     }
+    
+    console.log('🏁 STREAMING FINALIZADO - Backend salvou automaticamente');
+    console.log('📊 Estado final:');
+    console.log('   - window.sessionId:', window.sessionId);
+    console.log('   - window.conversationHistory.length:', window.conversationHistory?.length);
+    console.log('   - Última mensagem:', window.conversationHistory?.[window.conversationHistory?.length - 1]);
+    
+    // 🆕 RECARREGAR HISTÓRICO APÓS BACKEND SALVAR
+    setTimeout(async () => {
+        console.log('🔄 Recarregando histórico após mensagem...');
+        if (window.loadChatHistoryFromStorage && typeof window.loadChatHistoryFromStorage === 'function') {
+            try {
+                await window.loadChatHistoryFromStorage();
+                console.log('✅ Histórico recarregado - chat deve aparecer na sidebar');
+            } catch (error) {
+                console.error('❌ Erro ao recarregar histórico:', error);
+            }
+        } else {
+            console.warn('⚠️ Função loadChatHistoryFromStorage não disponível');
+        }
+    }, 2000); // 2s para garantir que backend salvou
+    
+    // 🆕 AUTO-SAVE: Disparar salvamento automático após finalizar streaming
+    setTimeout(() => {
+        console.log('🔍 === AUTO-SAVE DEBUG INICIADO ===');
+        console.log('SessionID atual:', window.sessionId);
+        console.log('ConversationHistory length:', window.conversationHistory?.length);
+        console.log('ConversationHistory:', window.conversationHistory);
+        console.log('Função autoSaveChatDuringConversation disponível:', typeof window.autoSaveChatDuringConversation);
+        console.log('History.js carregado:', typeof window.loadChatHistoryFromStorage);
+        
+        if (window.autoSaveChatDuringConversation && typeof window.autoSaveChatDuringConversation === 'function') {
+            console.log('💾 EXECUTANDO auto-save externo...');
+            try {
+                window.autoSaveChatDuringConversation();
+                console.log('✅ Auto-save externo chamado com sucesso');
+            } catch (error) {
+                console.error('❌ ERRO no auto-save externo:', error);
+            }
+        } else {
+            console.log('⚠️ Função auto-save externa NÃO DISPONÍVEL');
+            console.log('💾 Tentando auto-save fallback integrado...');
+            
+            // FALLBACK: Auto-save integrado
+            if (window.sessionId && window.conversationHistory && window.conversationHistory.length > 0) {
+                console.log('✅ Dados OK - executando fallback...');
+                autoSaveFallback();
+            } else {
+                console.log('❌ Dados insuficientes para auto-save:');
+                console.log('- SessionID:', !!window.sessionId);
+                console.log('- ConversationHistory:', !!window.conversationHistory);
+                console.log('- Length:', window.conversationHistory ? window.conversationHistory.length : 0);
+            }
+        }
+        console.log('🔍 === FIM AUTO-SAVE DEBUG ===');
+    }, 1000); // 1s delay para garantir que tudo foi processado
+    
     setTimeout(() => addMessageActions(container, content, false), 100);
     scrollToBottom();
+}
+
+// 🆕 SYNC: Garantir sincronização de session_id
+async function ensureSessionSync() {
+    try {
+        // Verificar se já temos session_id local
+        if (window.sessionId) {
+            console.log('📋 Session ID já definido:', window.sessionId.substring(0, 8) + '...');
+            return;
+        }
+        
+        // Tentar obter session_id do servidor
+        const response = await fetchAPI('/debug-session', {
+            method: 'GET',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.flask_session_id) {
+                console.log('🔄 Sincronizando session_id do servidor:', data.flask_session_id.substring(0, 8) + '...');
+                window.setSessionId(data.flask_session_id);
+            }
+        }
+    } catch (error) {
+        console.warn('⚠️ Erro na sincronização de sessão:', error);
+    }
+}
+
+// 🆕 EMERGENCY: Auto-save de emergência com timing conservador
+function setupEmergencyAutoSave() {
+    console.log('🚨 Configurando auto-save de emergência com validação...');
+    
+    // PRIMEIRO CHECK: Após 60s (tempo maior para garantir inicialização)
+    setTimeout(async () => {
+        console.log('🚨 EMERGENCY CHECK 1: Verificando primeira conversa...');
+        
+        // Só fazer emergency auto-save se a sessão estiver validada
+        if (window.sessionId && window.conversationHistory?.length > 0 && !window.lastAutoSave) {
+            console.log('🚨 EMERGENCY AUTO-SAVE: Primeira conversa detectada');
+            
+            if (window.autoSaveChatDuringConversation && typeof window.autoSaveChatDuringConversation === 'function') {
+                try {
+                    await window.autoSaveChatDuringConversation();
+                } catch (error) {
+                    console.error('❌ Erro no emergency auto-save:', error);
+                }
+            }
+        } else {
+            console.log('⏳ Emergency check 1: Sessão ainda não pronta ou sem conversa');
+        }
+    }, 60000); // 60s - mais conservador
+    
+    // SEGUNDO CHECK: Após 2 minutos (backup do backup)
+    setTimeout(async () => {
+        console.log('🚨 EMERGENCY CHECK 2: Segundo check de segurança...');
+        
+        if (window.sessionId && window.conversationHistory?.length > 0 && !window.lastAutoSave) {
+            console.log('🚨 EMERGENCY AUTO-SAVE FINAL: Última tentativa');
+            
+            if (window.autoSaveChatDuringConversation && typeof window.autoSaveChatDuringConversation === 'function') {
+                try {
+                    await window.autoSaveChatDuringConversation();
+                } catch (error) {
+                    console.error('❌ Erro no emergency auto-save final:', error);
+                }
+            }
+        }
+    }, 120000); // 2 minutos
+    
+    // Auto-save periódico mais conservador para conversas não salvas
+    setInterval(async () => {
+        const now = Date.now();
+        const lastSave = window.lastAutoSave || 0;
+        
+        // Só executar se sessão estiver válida E passou tempo suficiente
+        if (window.sessionId && window.conversationHistory?.length > 0 && (now - lastSave) > 120000) { // 2 min
+            console.log('⏰ Auto-save periódico conservador...');
+            
+            if (window.autoSaveChatDuringConversation && typeof window.autoSaveChatDuringConversation === 'function') {
+                try {
+                    await window.autoSaveChatDuringConversation();
+                } catch (error) {
+                    console.error('❌ Erro no auto-save periódico:', error);
+                }
+            }
+        }
+    }, 45000); // Check a cada 45s
+    
+    console.log('✅ Emergency auto-save configurado');
 }
 
 // =================== TRANSIÇÃO PARA CHAT ===================
@@ -529,9 +822,35 @@ function backToWelcome() {
 }
 
 // =================== GERENCIAMENTO SEGURO DE MENSAGENS ===================
+// Nova função que só adiciona ao visual, sem histórico
+function addMessageToChatVisual(content, isUser, systemInfo = null) {
+    const messagesContainer = document.getElementById('chatMessages');
+    if (!messagesContainer) { console.error('Elemento #chatMessages não encontrado no DOM!'); return; }
+    
+    console.log('🎨 Adicionando mensagem ao chat visual:', isUser ? 'usuário' : 'assistente');
+    _addMessageToChatDOM(messagesContainer, content, isUser, systemInfo);
+}
+
 function addMessageToChat(content, isUser, systemInfo = null) {
     const messagesContainer = document.getElementById('chatMessages');
     if (!messagesContainer) { console.error('Elemento #chatMessages não encontrado no DOM!'); return; }
+    
+    // Adicionar ao histórico de conversa
+    if (isUser) {
+        addToConversationHistory({
+            role: 'user',
+            content: content,
+            timestamp: new Date().toISOString()
+        });
+        console.log('📝 Mensagem do usuário adicionada ao histórico');
+    }
+    
+    _addMessageToChatDOM(messagesContainer, content, isUser, systemInfo);
+}
+
+// Função helper para adicionar ao DOM
+function _addMessageToChatDOM(messagesContainer, content, isUser, systemInfo) {
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message';
     if (isUser) messageDiv.classList.add('user');
@@ -636,11 +955,93 @@ function updateSettingsButtonStates() {
 // Função simplificada - sem verificação de planos
 
 async function initializeUserSession() {
-    console.log('🔄 Inicializando sessão...');
+    console.log('🔄 Inicializando sessão com validação completa...');
+    
+    // Máximo 3 tentativas
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            console.log(`📡 Tentativa ${attempt}/3 de inicialização...`);
+            
+            const response = await fetchAPI('/new-session', { 
+                method: 'POST', 
+                credentials: 'include',
+                headers: getHeaders()
+            });
+            
+            if (response.ok) { 
+                const data = await response.json(); 
+                console.log('✅ Resposta do servidor:', data); 
+                
+                if (data.session_id && data.status === 'sucesso') {
+                    // Definir session ID
+                    setSessionId(data.session_id);
+                    console.log('📋 Session ID sincronizado:', data.session_id.substring(0, 8) + '...');
+                    
+                    // VALIDAÇÃO DUPLA: Verificar se foi definido corretamente
+                    if (window.sessionId === data.session_id) {
+                        console.log('✅ Sincronização confirmada - sessão pronta para uso!');
+                        
+                        // TESTE FINAL: Verificar se backend reconhece a sessão
+                        await validateSessionWithBackend();
+                        return true; // Sucesso
+                    } else {
+                        console.error('❌ Falha na sincronização das variáveis de sessão');
+                        throw new Error('Sincronização de variáveis falhou');
+                    }
+                } else {
+                    console.error('❌ Resposta inválida do servidor:', data);
+                    throw new Error('Resposta sem session_id válido');
+                }
+            } else {
+                console.error(`❌ Erro HTTP ${response.status}:`, await response.text());
+                throw new Error(`HTTP ${response.status}`);
+            }
+        } catch (error) { 
+            console.error(`❌ Tentativa ${attempt} falhou:`, error.message);
+            
+            if (attempt < 3) {
+                // Aguardar antes da próxima tentativa
+                const delay = attempt * 1000; // 1s, 2s
+                console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+                console.error('❌ Todas as tentativas falharam - usando fallback');
+                // Fallback para sessão local
+                startNewSession();
+                return false;
+            }
+        }
+    }
+    
+    return false;
+}
+
+// Nova função para validar sessão com backend
+async function validateSessionWithBackend() {
     try {
-        const response = await fetchAPI('/api/init-session', { method: 'POST', credentials: 'include' });
-        if (response.ok) { const data = await response.json(); console.log(' Sessão inicializada:', data); if (data.session_id) sessionId = data.session_id; }
-    } catch (error) { console.error('Erro ao inicializar sessão:', error); }
+        console.log('🔍 Validando sessão com o backend...');
+        const response = await fetchAPI('/debug-session', { 
+            method: 'GET', 
+            credentials: 'include' 
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('🔍 Status da sessão no backend:', {
+                flask_session_id: data.flask_session_id?.substring(0, 8) + '...',
+                session_exists: data.session_exists_in_manager,
+                match: data.flask_session_id === window.sessionId
+            });
+            
+            if (data.flask_session_id !== window.sessionId) {
+                console.warn('⚠️ Dessincronia detectada - corrigindo...');
+                setSessionId(data.flask_session_id);
+            }
+        }
+    } catch (error) {
+        console.warn('⚠️ Não foi possível validar sessão:', error.message);
+    }
+}
 }
 
 
@@ -956,23 +1357,183 @@ function generateSessionId() {
 }
 
 function startNewSession() {
-    sessionId = generateSessionId();
-    conversationHistory = [];
+    setSessionId(generateSessionId());
+    clearConversationHistory();
     isNewSession = true;
     userMessageCount = 0;
     feedbackShown = false;
+    // Limpar ID do chat atual
+    window.currentChatId = null;
     console.log('Nova sessão iniciada:', sessionId);
 }
 
 function clearCurrentSession() {
     if (currentRequest) cancelCurrentRequest();
-    sessionId = null;
-    conversationHistory = [];
+    setSessionId(null);
+    clearConversationHistory();
     isNewSession = true;
     userMessageCount = 0;
     feedbackShown = false;
+    // Limpar ID do chat atual
+    window.currentChatId = null;
     console.log('🧹 Sessão limpa');
 }
+
+// =================== SALVAMENTO ANTECIPADO ===================
+async function createChatEarly(userMessage) {
+    try {
+        console.log('🚀 Criando chat ANTES da resposta da IA...');
+        
+        // Gerar título baseado na mensagem do usuário
+        let chatTitle = userMessage.substring(0, 40);
+        if (userMessage.length > 40) {
+            chatTitle += '...';
+        }
+        
+        // Gerar ID único
+        const chatId = 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        
+        // Dados do chat inicial (só com mensagem do usuário)
+        const chatData = {
+            id: chatId,
+            title: chatTitle,
+            messages: [...conversationHistory], // Histórico atual (com mensagem do usuário)
+            session_id: sessionId,
+            thinking_mode: currentThinkingMode || false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        };
+        
+        console.log('📤 Salvando chat antecipadamente:', {
+            id: chatId,
+            title: chatTitle,
+            messages: chatData.messages.length,
+            session: sessionId ? sessionId.substring(0, 8) + '...' : 'null'
+        });
+        
+        const response = await fetch('/api/chats/auto-save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(chatData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.status === 'sucesso') {
+            console.log('✅ Chat criado antecipadamente:', result.message);
+            // Armazenar ID do chat atual
+            window.currentChatId = chatId;
+            return chatId;
+        } else {
+            console.error('❌ Erro ao criar chat antecipadamente:', result.message);
+            return null;
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro no salvamento antecipado:', error);
+        return null;
+    }
+}
+
+// =================== AUTO-SAVE FALLBACK ===================
+async function autoSaveFallback() {
+    try {
+        console.log('🔄 Auto-save fallback - verificando currentChatId:', window.currentChatId);
+        
+        let chatData;
+        let isUpdate = false;
+        
+        if (window.currentChatId) {
+            // ATUALIZAR chat existente (já foi criado antecipadamente)
+            console.log('📝 Atualizando chat existente:', window.currentChatId);
+            isUpdate = true;
+            chatData = {
+                id: window.currentChatId,
+                messages: [...conversationHistory], // Histórico completo com resposta da IA
+                updated_at: new Date().toISOString()
+            };
+        } else {
+            // CRIAR novo chat (fallback se salvamento antecipado falhou)
+            console.log('🆕 Criando novo chat (fallback)');
+            let chatTitle = 'Nova Conversa';
+            const firstUserMsg = conversationHistory.find(m => m.role === 'user');
+            if (firstUserMsg && firstUserMsg.content) {
+                chatTitle = firstUserMsg.content.substring(0, 40) + (firstUserMsg.content.length > 40 ? '...' : '');
+            }
+            
+            chatData = {
+                id: 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                title: chatTitle,
+                messages: [...conversationHistory],
+                session_id: sessionId,
+                thinking_mode: currentThinkingMode || false,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+        }
+        
+        const actionText = isUpdate ? 'Atualizando' : 'Criando';
+        console.log(`📤 ${actionText} chat:`, {
+            id: chatData.id,
+            title: chatData.title || '(mantendo título)',
+            messages: chatData.messages.length,
+            session: sessionId ? sessionId.substring(0, 8) + '...' : 'null'
+        });
+        
+        const response = await fetch('/api/chats/auto-save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(chatData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.status === 'sucesso') {
+            const successText = isUpdate ? 'atualizado' : 'criado';
+            console.log(`✅ Chat ${successText}:`, result.message);
+            if (!isUpdate) {
+                // Se criou novo chat no fallback, armazenar ID
+                window.currentChatId = chatData.id;
+            }
+        } else {
+            console.error('❌ Erro no auto-save:', result.message);
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro no auto-save fallback:', error);
+    }
+}
+
+// Função de teste manual
+window.testAutoSave = function() {
+    console.log('🧪 Teste manual do auto-save...');
+    console.log('SessionID:', sessionId);
+    console.log('CurrentChatId:', window.currentChatId);
+    console.log('Mensagens:', conversationHistory ? conversationHistory.length : 0);
+    
+    if (sessionId && conversationHistory && conversationHistory.length > 0) {
+        autoSaveFallback();
+    } else {
+        console.log('❌ Dados insuficientes para auto-save');
+    }
+};
+
+window.testEarlySave = function(message = 'Teste de salvamento antecipado') {
+    console.log('🧪 Testando salvamento antecipado...');
+    if (!sessionId) {
+        console.log('❌ Sessão não inicializada');
+        return;
+    }
+    
+    // Simular mensagem do usuário
+    addToConversationHistory({
+        role: 'user',
+        content: message,
+        timestamp: new Date().toISOString()
+    });
+    
+    createChatEarly(message);
+};
 
 // =================== EXPORTAR FUNÇÕES GLOBAIS ===================
 window.toggleConfigDropdown = toggleConfigDropdown;

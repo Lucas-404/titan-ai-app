@@ -154,8 +154,9 @@ if __name__ == '__main__':
         host=HOST, 
         port=PORT, 
         debug=DEBUG,
-        threaded=True,  # Suporte a múltiplas threads
-        use_reloader=False  # Evitar problemas com cleanup thread
+        threaded=True,
+        use_reloader=False,
+        ssl_context=('C:\\certs\\server.crt', 'C:\\certs\\server.key')
     )
 
 AI_STREAM_CHUNK_SIZE = 4096

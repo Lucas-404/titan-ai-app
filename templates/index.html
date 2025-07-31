@@ -43,6 +43,66 @@
 
 <body>
 
+    <!-- Botão para abrir sidebar (sem onclick - será adicionado via JS) -->
+    <button class="sidebar-toggle" id="sidebarToggle" title="Histórico de conversas">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+        </svg>
+    </button>
+
+    <!-- Sidebar de Histórico -->
+    <div class="history-sidebar" id="historySidebar">
+        <div class="sidebar-header">
+            <h3>Histórico</h3>
+            <button class="sidebar-close" onclick="toggleHistorySidebar()" title="Fechar">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="sidebar-controls">
+            <button class="sidebar-btn primary" onclick="startNewChat()" title="Nova conversa">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                </svg>
+                Nova Conversa
+            </button>
+        </div>
+        
+        <div class="sidebar-search">
+            <input type="text" id="historySearch" placeholder="Buscar conversas..." class="search-input">
+        </div>
+        
+        <div class="sidebar-filters">
+            <button class="filter-btn active" data-filter="all">Todas</button>
+            <button class="filter-btn" data-filter="pinned">Fixadas</button>
+            <button class="filter-btn" data-filter="recent">Recentes</button>
+        </div>
+        
+        <div class="sidebar-content" id="historyList">
+            <!-- Lista de conversas será inserida aqui -->
+        </div>
+        
+        <div class="sidebar-footer">
+            <button class="sidebar-action-btn" onclick="exportAllChats()" title="Exportar todas">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                </svg>
+                Exportar
+            </button>
+            <button class="sidebar-action-btn danger" onclick="clearAllHistory()" title="Limpar histórico">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                    <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
+                </svg>
+                Limpar
+            </button>
+        </div>
+    </div>
+
+    <!-- Overlay para fechar sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleHistorySidebar()"></div>
+
     <!-- Partículas animadas -->
     <div class="particles" id="particles"></div>
 
@@ -79,7 +139,7 @@
 
                                 <div class="tooltip">
                                     <div class="tooltip-header">
-                                        <img src="/static/images/thinking-mode-banner.png"
+                                        <img src="/templates/images/thinking-mode-banner.png"
                                             alt="Modo Pensamento Prolongado" class="tooltip-banner">
                                     </div>
                                     <div class="tooltip-content">
@@ -149,7 +209,7 @@
 
                                 <div class="tooltip">
                                     <div class="tooltip-header">
-                                        <img src="/static/images/thinking-mode-banner.png"
+                                        <img src="/templates/images/thinking-mode-banner.png"
                                             alt="Modo Pensamento Prolongado" class="tooltip-banner">
                                     </div>
                                     <div class="tooltip-content">
@@ -422,6 +482,7 @@
     <!-- Scripts -->
     <script src="/static/script.js"></script>
     <script src="/static/feedback-inline.js"></script>
+    <script src="/static/history.js"></script>
 </body>
 
 </html>

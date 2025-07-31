@@ -113,3 +113,11 @@ security_logs/
 venv/
 node_modules/
 package-lock.json
+data/
+.claude/
+PLANO_USUARIOS.md
+avancado/
+chats/
+GEMINI.md
+CLAUDE.md
+baixar_videos.py

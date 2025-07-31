@@ -541,4 +541,34 @@ COMPORTAMENTO:
             print(f" [STREAM] Erro fatal no streaming: {e}")
             yield {"error": f"Erro inesperado no streaming: {str(e)}"}
 
+    def generate_simple_response(self, prompt):
+        """Geração simples e síncrona para títulos e operações rápidas"""
+        try:
+            payload = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "temperature": 0.1,  # Baixa temperatura para respostas consistentes
+                "max_tokens": 100    # Limite baixo para títulos
+            }
+            
+            response = requests.post(
+                self.base_url,
+                json=payload,
+                timeout=10,  # Timeout curto
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "choices" in data and len(data["choices"]) > 0:
+                    content = data["choices"][0]["message"]["content"]
+                    return content.strip()
+            
+            return None
+            
+        except Exception as e:
+            print(f"Erro na geração simples: {str(e)}")
+            return None
+
 ai_client = AIClient()

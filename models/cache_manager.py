@@ -13,7 +13,7 @@ class ContextCache:
         self._context_dirty = set()     # Sessões que precisam recarregar
         self._last_access = {}          # Último acesso para limpeza
         
-        print("🧠 ContextCache inicializado")
+        print("ContextCache inicializado")
     
     def get_context(self, session_id):
         """Busca contexto do cache (retorna None se precisa recarregar)"""
